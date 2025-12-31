@@ -22,6 +22,12 @@ h1{
   font-family: Georgia, serif;
   margin-bottom:10px;
 }
+
+h2 {
+  font-family: Georgia, serif;
+  font-weight: 600;
+}
+
 p{line-height:1.55}
 .card{
   background:#F6F7F9;
@@ -59,6 +65,9 @@ button{
   border-radius:12px;
   background:#EFEFF4;
   border:1px dashed #8FA6C1;
+  display: block;
+  margin-top: 20px;
+  color: #6A6A85;
 }
 .badge{
   display:inline-block;
@@ -100,6 +109,24 @@ button{
   padding: 14px;
   border: 1px solid #8FA6C1;
   box-sizing: border-box;
+  color: #2E2E38;
+  box-shadow: 0 6px 18px rgba(15,26,43,0.08);
+}
+
+.card-item .name {
+  color: #0F1A2B;
+}
+
+.card-item .celebrity {
+  color: #4B3F72;
+}
+
+.card-item .score {
+  color: #0F1A2B;
+}
+
+.card-item p {
+  color: #4A4A5A;
 }
 
 @media (max-width: 768px) {
@@ -154,6 +181,8 @@ button{
   margin-top:24px;
   font-family: Georgia, serif;
   font-size:20px;
+  color: #0F1A2B;
+  margin-bottom: 12px;
 }
 
 .photo {
@@ -232,6 +261,93 @@ button{
   }
 }
 
+.form-grid{
+  display:grid;
+  grid-template-columns: 1fr 320px;
+  gap:24px;
+  align-items:start;
+}
+
+.best-card{
+  background:#FFFFFF;
+  color:#3A3A3A;
+  border-radius:14px;
+  padding:16px;
+  border:2px solid #D6B36A;
+  box-shadow: 0 6px 18px rgba(15,26,43,0.08);
+}
+
+/* Mobile : empilement */
+@media (max-width: 768px){
+  .form-grid{
+    grid-template-columns: 1fr;
+  }
+}
+
+.card-info {
+  background: #F2F3F7;
+  color: #3A3A3A;
+  max-width: 760px;
+  margin: 40px auto 0;
+}
+
+.card-info h2 {
+  font-size: 18px;
+  color: #0F1A2B;
+}
+
+.card-info p,
+.card-info li {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.card-info ul {
+  margin-top: 12px;
+}
+
+.card-info p:last-child {
+  font-size: 12px;
+  color: #6A6A85;
+}
+
+/* ===============================
+   MOBILE – COMMENT FONCTIONNE
+   VERSION STABLE
+   =============================== */
+@media (max-width: 768px) {
+
+  .card-info {
+    max-width: 100%;
+    margin: 32px 0 0;
+    padding: 20px;
+
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(15,26,43,0.12);
+  }
+
+  .card-info h2 {
+    font-size: 17px;
+    margin-bottom: 12px;
+  }
+
+  .card-info p,
+  .card-info li {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .card-info ul {
+    padding-left: 18px;
+    margin-top: 14px;
+  }
+
+  .card-info p:last-child {
+    font-size: 12px;
+    opacity: 0.7;
+  }
+}
+
 </style>
 </head>
 
@@ -243,23 +359,48 @@ button{
     (féminin, masculin, mixte).
   </p>
 
-  <div class="card">
-    <label class="input">Prénom 1
+  <div class="form-grid">
+
+  <div>
+    <label>Prénom 1
       <input id="p1">
     </label>
 
-    <label class="input">Prénom 2
+    <label>Prénom 2
       <input id="p2">
     </label>
 
     <button onclick="analyser()">Analyser</button>
+  </div>
 
+  <!-- Carte meilleure compatibilité -->
+  <div id="bestCard" class="best-card" style="display:none">
+    <div class="section-title">Meilleure compatibilité</div>
+
+    <div class="name-row">
+      <img id="bestImg" class="photo" alt=""
+           onclick="openModal(this.src)">
+      <div>
+        <div id="bestName" class="name"></div>
+        <div id="bestCeleb" class="celebrity"></div>
+      </div>
+    </div>
+
+    <div class="gauge">
+      <div id="bestGauge"></div>
+    </div>
+
+    <div id="bestScore" class="score"></div>
+    <p id="bestText"></p>
+  </div>
+
+</div>
 
 
     <div id="results" class="result" style="display:none"></div>
   </div>
 
-  <div class="card" style="margin-top:24px">
+  <div class="card card-info" style="margin-top:24px">
   <h2 style="font-family:Georgia,serif;margin-top:0">Comment fonctionne l’algorithme ?</h2>
 
   <p>
@@ -326,11 +467,37 @@ function compatibilityScore(a,b,c){
   return Math.max(50, Math.min(95, score));
 }
 
+const interpretations = {
+  high: [
+    "Harmonie naturelle et dynamique relationnelle très favorable.",
+    "Compatibilité élevée, favorisant une relation fluide et intuitive.",
+    "Affinité profonde et climat relationnel particulièrement sain."
+  ],
+  good: [
+    "Équilibre solide, relation fluide et structurante.",
+    "Relation équilibrée, soutenue par une dynamique cohérente.",
+    "Bonne compatibilité, propice à une évolution sereine."
+  ],
+  medium: [
+    "Compatibilité stable, à renforcer par la communication.",
+    "Relation évolutive, soutenue par un dialogue constructif.",
+    "Base relationnelle saine, à consolider par l’échange."
+  ],
+  low: [
+    "Lien évolutif nécessitant attention et ajustements.",
+    "Compatibilité fragile demandant un engagement conscient.",
+    "Relation perfectible, reposant sur des efforts mutuels."
+  ]
+};
+
 function interpretation(score){
-  if(score >= 85) return "Harmonie naturelle et climat relationnel très favorable.";
-  if(score >= 70) return "Équilibre solide, relation fluide et structurante.";
-  if(score >= 60) return "Compatibilité stable, à renforcer par la communication.";
-  return "Lien évolutif nécessitant attention et ajustements.";
+  let pool;
+  if(score >= 85) pool = interpretations.high;
+  else if(score >= 70) pool = interpretations.good;
+  else if(score >= 60) pool = interpretations.medium;
+  else pool = interpretations.low;
+
+  return pool[score % pool.length];
 }
 
 /* ================= DONNÉES ================= */
@@ -620,48 +787,71 @@ function analyser(){
   const p2raw = document.getElementById("p2").value;
   if(!p1raw || !p2raw) return;
 
+  const box = document.getElementById("results");
+  box.style.display = "block";
+  box.innerHTML = "<em>Analyse en cours…</em>";
+
+  setTimeout(() => {
+    runAnalysis(p1raw, p2raw);
+  }, 3000);
+}
+
+
+function runAnalysis(p1raw, p2raw){
   const p1 = normalize(p1raw);
   const p2 = normalize(p2raw);
   const seed = nameValue(p1 + p2);
 
-  let fem = pickMultiple(female, seed, 3, 10);
-  let mal = pickMultiple(male,   seed, 3, 30);
-  let mix = pickMultiple(mixed,  seed, 3, 60);
+  let fem = sortByScore(pickMultiple(female, seed, 3, 10), p1, p2);
+  let mal = sortByScore(pickMultiple(male,   seed, 3, 30), p1, p2);
+  let mix = sortByScore(pickMultiple(mixed,  seed, 3, 60), p1, p2);
 
-  fem = sortByScore(fem, p1, p2);
-  mal = sortByScore(mal, p1, p2);
-  mix = sortByScore(mix, p1, p2);
+  const best = findBestName([fem, mal, mix], p1, p2);
+
+  document.getElementById("bestName").innerText = best.name;
+  document.getElementById("bestCeleb").innerText = celebFor(best.name);
+  document.getElementById("bestScore").innerText =
+    `Compatibilité : ${best.score}%`;
+  document.getElementById("bestText").innerText =
+    interpretation(best.score);
+
+  document.getElementById("bestGauge").style.width = best.score + "%";
+
+  document.getElementById("bestCard").style.display = "block";
+  
+ loadCelebrityPhoto(
+  celebFor(best.name),
+  "bestImg"
+);
 
   let html = `<h2>Résultats</h2>`;
-
   html += renderCards("Prénoms féminins compatibles", fem, p1, p2);
   html += renderCards("Prénoms masculins compatibles", mal, p1, p2);
   html += renderCards("Prénoms mixtes compatibles", mix, p1, p2);
-
   html += `<small>Algorithme déterministe — mêmes entrées → mêmes résultats.</small>`;
 
   const box = document.getElementById("results");
   box.innerHTML = html;
-  box.style.display = "block";
-  // Indication de scroll mobile
-if (window.innerWidth < 768) {
-  document.querySelectorAll(".cards").forEach(cards => {
-    cards.scrollTo({ left: 40, behavior: "smooth" });
-    setTimeout(() => {
-      cards.scrollTo({ left: 0, behavior: "smooth" });
-    }, 600);
-  });
-}
-  
+
+  // Scroll hint mobile
+  if (window.innerWidth < 768) {
+    document.querySelectorAll(".cards").forEach(cards => {
+      cards.scrollTo({ left: 40, behavior: "smooth" });
+      setTimeout(() => cards.scrollTo({ left: 0, behavior: "smooth" }), 600);
+    });
+  }
+
+  // Chargement photos
   setTimeout(() => {
-  document.querySelectorAll(".card-item").forEach((card, i) => {
-    const celeb = card.querySelector(".celebrity").innerText;
-    const img = card.querySelector("img");
-    if(img) loadCelebrityPhoto(celeb, img.id);
-  });
-}, 100);
+    document.querySelectorAll(".card-item").forEach(card => {
+      const celeb = card.querySelector(".celebrity")?.innerText;
+      const img = card.querySelector("img");
+      if(img && celeb) loadCelebrityPhoto(celeb, img.id);
+    });
+  }, 3000);
 
 }
+  
 
 function pickMultiple(list, seed, count, offset){
   const results = [];
@@ -717,6 +907,20 @@ function sortByScore(names, p1, p2) {
     .sort((a, b) => b.score - a.score)
     .map(item => item.name);
 }
+
+function findBestName(groups, p1, p2){
+  let best = null;
+
+  groups.flat().forEach(name => {
+    const score = compatibilityScore(p1, p2, normalize(name));
+    if(!best || score > best.score){
+      best = { name, score };
+    }
+  });
+
+  return best;
+}
+
 
 </script>
 

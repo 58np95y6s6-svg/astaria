@@ -79,6 +79,18 @@ button{
 
 .cards {
   position: relative;
+  mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black 94%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black 94%,
+    transparent 100%
+  );
 }
 
 .card-item {
@@ -612,9 +624,13 @@ function analyser(){
   const p2 = normalize(p2raw);
   const seed = nameValue(p1 + p2);
 
-  const fem = pickMultiple(female, seed, 3, 10);
-  const mal = pickMultiple(male,   seed, 3, 30);
-  const mix = pickMultiple(mixed,  seed, 3, 60);
+  let fem = pickMultiple(female, seed, 3, 10);
+  let mal = pickMultiple(male,   seed, 3, 30);
+  let mix = pickMultiple(mixed,  seed, 3, 60);
+
+  fem = sortByScore(fem, p1, p2);
+  mal = sortByScore(mal, p1, p2);
+  mix = sortByScore(mix, p1, p2);
 
   let html = `<h2>Résultats</h2>`;
 
@@ -690,6 +706,16 @@ function openModal(src){
 function closeModal(){
   const modal = document.getElementById("photoModal");
   modal.classList.remove("active");
+}
+
+function sortByScore(names, p1, p2) {
+  return names
+    .map(name => ({
+      name,
+      score: compatibilityScore(p1, p2, normalize(name))
+    }))
+    .sort((a, b) => b.score - a.score)
+    .map(item => item.name);
 }
 
 </script>

@@ -82,8 +82,20 @@ button{
 .cards {
   display: flex;
   gap: 16px;
-  overflow-x: auto;
   padding-bottom: 8px;
+
+  /* centrage desktop */
+  justify-content: center;
+
+  /* scroll horizontal si nécessaire */
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+
+@media (max-width: 768px) {
+  .cards {
+    justify-content: flex-start;
+  }
 }
 
 .cards {
@@ -193,6 +205,13 @@ button{
   margin-bottom:8px;
   border:2px solid #D6B36A;
   background:#E6E8F0;
+
+  cursor: pointer;              /* ← IMPORTANT */
+  transition: transform .2s ease;
+}
+
+.photo:hover {
+  transform: scale(1.05);
 }
 
 .name-row {
@@ -287,8 +306,9 @@ button{
 .card-info {
   background: #F2F3F7;
   color: #3A3A3A;
-  max-width: 760px;
-  margin: 40px auto 0;
+  max-width: 80%;
+  margin-right: 8%;
+  margin-left: 8%;
 }
 
 .card-info h2 {
@@ -309,43 +329,6 @@ button{
 .card-info p:last-child {
   font-size: 12px;
   color: #6A6A85;
-}
-
-/* ===============================
-   MOBILE – COMMENT FONCTIONNE
-   VERSION STABLE
-   =============================== */
-@media (max-width: 768px) {
-
-  .card-info {
-    max-width: 100%;
-    margin: 32px 0 0;
-    padding: 20px;
-
-    border-radius: 14px;
-    box-shadow: 0 6px 18px rgba(15,26,43,0.12);
-  }
-
-  .card-info h2 {
-    font-size: 17px;
-    margin-bottom: 12px;
-  }
-
-  .card-info p,
-  .card-info li {
-    font-size: 13px;
-    line-height: 1.6;
-  }
-
-  .card-info ul {
-    padding-left: 18px;
-    margin-top: 14px;
-  }
-
-  .card-info p:last-child {
-    font-size: 12px;
-    opacity: 0.7;
-  }
 }
 
 </style>
@@ -469,24 +452,55 @@ function compatibilityScore(a,b,c){
 
 const interpretations = {
   high: [
-    "Harmonie naturelle et dynamique relationnelle très favorable.",
-    "Compatibilité élevée, favorisant une relation fluide et intuitive.",
-    "Affinité profonde et climat relationnel particulièrement sain."
+    "Harmonie naturelle très marquée, favorisant une relation fluide, intuitive et durable.",
+    "Compatibilité exceptionnelle, fondée sur une compréhension mutuelle et une forte résonance symbolique.",
+    "Affinité profonde, créant un climat relationnel serein, équilibré et naturellement harmonieux.",
+    "Connexion évidente entre les prénoms, suggérant une entente spontanée et une grande cohérence.",
+    "Relation hautement favorable, soutenue par une énergie commune stable et constructive.",
+    "Accord symbolique fort, propice à une dynamique relationnelle épanouissante et confiante.",
+    "Compatibilité optimale, laissant présager une relation riche, fluide et alignée.",
+    "Harmonie remarquable, où les différences renforcent l’équilibre global.",
+    "Climat relationnel très sain, porté par une complémentarité naturelle.",
+    "Lien symbolique fort, générateur de stabilité et de fluidité relationnelle."
   ],
+
   good: [
     "Équilibre solide, relation fluide et structurante.",
-    "Relation équilibrée, soutenue par une dynamique cohérente.",
-    "Bonne compatibilité, propice à une évolution sereine."
+    "Bonne compatibilité, favorisant une évolution sereine et progressive.",
+    "Relation équilibrée, soutenue par une dynamique cohérente et stable.",
+    "Affinité harmonieuse, offrant de bonnes bases relationnelles.",
+    "Compatibilité satisfaisante, propice à une relation durable.",
+    "Accord global positif, laissant place à une évolution constructive.",
+    "Relation stable, reposant sur une complémentarité naturelle.",
+    "Bonne entente symbolique, facilitant la communication et l’équilibre.",
+    "Climat relationnel sain, soutenu par des fondations solides.",
+    "Compatibilité harmonieuse, favorisant une relation structurée et fiable."
   ],
+
   medium: [
     "Compatibilité stable, à renforcer par la communication.",
     "Relation évolutive, soutenue par un dialogue constructif.",
-    "Base relationnelle saine, à consolider par l’échange."
+    "Base relationnelle saine, à consolider par l’échange.",
+    "Compatibilité correcte, nécessitant une attention mutuelle.",
+    "Relation équilibrée mais perfectible, demandant implication et écoute.",
+    "Lien symbolique modéré, pouvant évoluer positivement avec le temps.",
+    "Compatibilité mesurée, propice à une progression graduelle.",
+    "Relation fondée sur des bases solides mais nécessitant ajustements.",
+    "Affinité raisonnable, à approfondir par la communication.",
+    "Équilibre présent, appelant à une construction relationnelle consciente."
   ],
+
   low: [
     "Lien évolutif nécessitant attention et ajustements.",
     "Compatibilité fragile demandant un engagement conscient.",
-    "Relation perfectible, reposant sur des efforts mutuels."
+    "Relation perfectible, reposant sur des efforts mutuels.",
+    "Affinité limitée, nécessitant patience et compréhension.",
+    "Compatibilité délicate, à travailler avec soin et communication.",
+    "Relation exigeante, demandant une implication active.",
+    "Lien symbolique faible, appelant à des ajustements constants.",
+    "Compatibilité sensible, nécessitant vigilance et adaptabilité.",
+    "Relation évolutive, demandant écoute et compromis.",
+    "Affinité discrète, pouvant progresser avec un effort commun."
   ]
 };
 

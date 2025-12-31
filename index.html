@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Astéria – Compatibilité à 3 prénoms</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+
+body{
+  margin:0;
+  font-family: Inter, Arial, sans-serif;
+  background:#0F1A2B;
+  color:#F6F7F9;
+}
+.container{
+  max-width:900px;
+  margin:40px auto;
+  padding:24px;
+}
+h1{
+  font-family: Georgia, serif;
+  margin-bottom:10px;
+}
+p{line-height:1.55}
+.card{
+  background:#F6F7F9;
+  color:#3A3A3A;
+  border-radius:14px;
+  padding:20px;
+  margin-top:20px;
+  
+}
+label{
+  display:block;
+  margin-top:12px;
+  font-size:14px;
+}
+input{
+  width:100%;
+  padding:12px;
+  border-radius:10px;
+  border:1px solid #8FA6C1;
+  margin-top:6px;
+  box-sizing: border-box;
+}
+button{
+  margin-top:16px;
+  padding:12px 18px;
+  border-radius:12px;
+  border:none;
+  background:#D6B36A;
+  font-weight:700;
+  cursor:pointer;
+}
+.result{
+  margin-top:18px;
+  padding:16px;
+  border-radius:12px;
+  background:#EFEFF4;
+  border:1px dashed #8FA6C1;
+}
+.badge{
+  display:inline-block;
+  margin-top:10px;
+  padding:6px 10px;
+  border-radius:20px;
+  background:#4B3F72;
+  color:#F6F7F9;
+  font-size:13px;
+}
+
+.cards {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.cards {
+  position: relative;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 6%,
+    black 94%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 6%,
+    black 94%,
+    transparent 100%
+  );
+}
+
+.card-item {
+  flex: 0 0 260px; /* largeur fixe */
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 14px;
+  border: 1px solid #8FA6C1;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .cards {
+    gap: 12px;
+  }
+}
+
+.table th {
+  text-align:left;
+  font-family: Georgia, serif;
+  color:#0F1A2B;
+}
+
+.table-wrapper {
+  overflow-x:auto;
+}
+
+.name {
+  font-weight:700;
+  font-size:16px;
+  margin-bottom:4px;
+}
+
+.celebrity {
+  font-size:13px;
+  color:#4B3F72;
+  margin-bottom:10px;
+}
+
+.gauge {
+  background:#E6E8F0;
+  border-radius:20px;
+  overflow:hidden;
+  height:12px;
+  margin:6px 0 10px;
+}
+
+.gauge > div {
+  height:100%;
+  border-radius:20px;
+  background:linear-gradient(90deg,#4B3F72,#D6B36A);
+  transition:width .4s ease;
+}
+
+.score {
+  font-size:13px;
+  font-weight:600;
+}
+
+.section-title {
+  margin-top:24px;
+  font-family: Georgia, serif;
+  font-size:20px;
+}
+
+.photo {
+  width:64px;
+  height:64px;
+  border-radius:50%;
+  object-fit:cover;
+  margin-bottom:8px;
+  border:2px solid #D6B36A;
+  background:#E6E8F0;
+}
+
+.name-row {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:6px;
+}
+
+.photo-mini {
+  width:36px;
+  height:36px;
+  border-radius:50%;
+  object-fit:cover;
+  border:2px solid #D6B36A;
+  cursor:pointer;
+  transition:transform .2s ease;
+}
+
+.photo-mini:hover {
+  transform:scale(1.05);
+}
+
+/* MODAL ZOOM */
+.modal {
+  position:fixed;
+  inset:0;
+  background:rgba(15,26,43,.85);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:999;
+}
+
+.modal img {
+  max-width:80%;
+  max-height:80%;
+  border-radius:16px;
+  border:3px solid #D6B36A;
+}
+
+.modal.active {
+  display:flex;
+}
+
+.modal span {
+  position:absolute;
+  top:20px;
+  right:24px;
+  font-size:28px;
+  color:#F6F7F9;
+  cursor:pointer;
+}
+
+/* Indication scroll mobile */
+.scroll-hint {
+  font-size:13px;
+  color:#6A6A85;
+  margin:6px 0 8px;
+  display:none;
+}
+
+@media (max-width: 768px) {
+  .scroll-hint {
+    display:block;
+  }
+}
+
+</style>
+</head>
+
+<body>
+<div class="container">
+  <h1>Compatibilité à 3 prénoms</h1>
+  <p>
+    Entrez deux prénoms. Astéria génère trois prénoms compatibles
+    (féminin, masculin, mixte).
+  </p>
+
+  <div class="card">
+    <label class="input">Prénom 1
+      <input id="p1">
+    </label>
+
+    <label class="input">Prénom 2
+      <input id="p2">
+    </label>
+
+    <button onclick="analyser()">Analyser</button>
+
+
+
+    <div id="results" class="result" style="display:none"></div>
+  </div>
+
+  <div class="card" style="margin-top:24px">
+  <h2 style="font-family:Georgia,serif;margin-top:0">Comment fonctionne l’algorithme ?</h2>
+
+  <p>
+    Astéria repose sur une analyse linguistique simple des prénoms.
+    Chaque compatibilité est calculée à partir de critères objectifs,
+    puis interprétée de manière symbolique.
+  </p>
+
+  <ul style="padding-left:18px">
+    <li><b>Base de stabilité</b> : un socle commun pour des résultats cohérents.</li>
+    <li><b>Équilibre des longueurs</b> : plus les prénoms sont proches en longueur, plus l’harmonie est forte.</li>
+    <li><b>Lettres communes</b> : les lettres partagées renforcent la proximité symbolique.</li>
+    <li><b>Harmonie phonétique</b> : l’alternance voyelles / consonnes améliore la fluidité.</li>
+  </ul>
+
+  <p style="font-size:13px;color:#555">
+    Les résultats sont déterministes et identiques pour une même combinaison de prénoms.
+  </p>
+</div>
+</div>
+
+<script>
+/* ================= ALGORITHME ================= */
+
+function normalize(str){
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z]/g, "");
+}
+
+function nameValue(name){
+  let sum = 0;
+  for(let i=0;i<name.length;i++){
+    let v = name.charCodeAt(i) - 96;
+    if(v >= 1 && v <= 26) sum += v;
+  }
+  return sum;
+}
+
+function compatibilityScore(a,b,c){
+  let base = 55;
+
+  let lenBalance = 10 - Math.abs(a.length - c.length);
+  lenBalance = Math.max(-6, Math.min(10, lenBalance));
+
+  let lettersAB = new Set((a+b).split(""));
+  let lettersC  = new Set(c.split(""));
+  let shared = [...lettersAB].filter(l => lettersC.has(l)).length;
+  let sharedBonus = Math.min(14, shared * 2);
+
+  let vowels = ["a","e","i","o","u","y"];
+  let harmony = 0;
+  let prev = null;
+  for(let ch of c){
+    let isVowel = vowels.includes(ch);
+    if(prev !== null && isVowel !== prev) harmony++;
+    prev = isVowel;
+  }
+  let harmonyBonus = Math.min(8, harmony);
+
+  let score = base + lenBalance + sharedBonus + harmonyBonus;
+  return Math.max(50, Math.min(95, score));
+}
+
+function interpretation(score){
+  if(score >= 85) return "Harmonie naturelle et climat relationnel très favorable.";
+  if(score >= 70) return "Équilibre solide, relation fluide et structurante.";
+  if(score >= 60) return "Compatibilité stable, à renforcer par la communication.";
+  return "Lien évolutif nécessitant attention et ajustements.";
+}
+
+/* ================= DONNÉES ================= */
+
+const female = [
+  "Emma","Lina","Clara","Inès","Camille","Anna","Jade","Louise","Mila","Chloé",
+  "Léa","Zoé","Manon","Sarah","Lucie","Élise","Juliette","Romane","Iris","Eva",
+  "Alicia","Margaux","Maëlle","Nina","Noémie","Pauline","Adèle","Ambre","Louna",
+  "Victoria","Célia","Sofia","Maya","Elena","Naomi","Yasmine","Salomé","Océane",
+  "Mathilde","Clémence","Valentine","Agathe","Capucine","Thaïs","Garance",
+  "Aurore","Blandine","Cassandre","Daphné","Elisa","Fanny","Héloïse","Isabelle",
+  "Jeanne","Laure","Marion","Morgane","Paloma","Quitterie","Solène","Tiphaine",
+  "Violette","Élodie","Anaïs","Bianca","Chiara","Diane","Estelle","Florence",
+  "Giulia","Helena","Ilona","Joséphine","Karine","Lorie","Maud","Nour","Ophélie",
+  "Prune","Roxane","Sibylle","Tess","Yara","Zélie",
+
+  /* Ajouts */
+  "Alma","Amélia","Anouk","Apolline","Ariane","Bérénice","Carmen","Céleste",
+  "Coline","Constance","Danaé","Delphine","Éléonore","Elsa","Emmy","Esme",
+  "Faustine","Flavie","Gabrielle","Hannah","Ilyana","Isaline","Jasmine",
+  "Justine","Kenza","Lila","Lilou","Maëlys","Mélina","Mina","Noor","Olivia",
+  "Pia","Rania","Sixtine","Suzanne","Thaïna","Victoire","Ysaline","Zina"
+];
+
+
+const male = [
+  "Lucas","Noah","Louis","Ethan","Hugo","Gabriel","Léo","Arthur","Adam","Jules",
+  "Raphaël","Maël","Nathan","Tom","Sacha","Théo","Mathis","Antoine","Paul",
+  "Maxime","Victor","Axel","Baptiste","Romain","Simon","Élias","Samuel","Nolan",
+  "Martin","Oscar","Benjamin","Marius","Adrien","Clément","Robin",
+  "Augustin","Gaspard","Liam","Aaron","Isaac","Evan","Noé","Émile","Timéo",
+  "Alexandre","Basile","César","Damien","Edouard","Florian","Guillaume",
+  "Henri","Ismaël","Jean","Kevin","Loïc","Matteo","Nicolas","Olivier","Pierre",
+  "Quentin","Rémi","Sébastien","Tristan","Ulysse","Valentin","William","Yanis",
+  "Zacharie","Alban","Bruno","Corentin","Denis","Fabien","Grégoire","Ilan",
+  "Jonathan","Kylian","Laurent","Mehdi","Nassim","Pablo","Rayan","Thomas","Yohan",
+
+  /* Ajouts */
+  "Achille","Amaury","Antonin","Armand","Bastien","Célestin","Constant",
+  "Dorian","Émeric","Esteban","Gabin","Hadrien","Ibrahim","Jérémy","Joachim",
+  "Léon","Marceau","Mathéo","Noam","Octave","Pacôme","Ruben","Sami","Titouan",
+  "Valère","Yassine","Zayn","Anselme","Boris","Diego","Eliott","Gaëtan",
+  "Hector","Iskander","Jason","Khalil","Loris","Matias","Noham","Owen","Rafael"
+];
+
+const mixed = [
+  "Alex","Charlie","Sacha","Noa","Andrea","Lou","Camille","Morgan","Alix","Eden",
+  "Robin","Sam","Taylor","Ariel","Jay","Gaël","Milan","Eli","Loan","Sky",
+  "Avery","Jordan","Cameron","Quinn","Remy","Dylan","Alexis","Casey",
+  "Yaël","Nikita","Ezra","Hayden","Logan","Micah","Rowan","Sloan","Emerson",
+  "Reese","Jamie","Kris","Lee","Noor","Perrin","Riley","Shawn","Sidney",
+  "Toni","Val","Wren","Yuri","Zen",
+
+  /* Ajouts */
+  "Ali","Amani","Angel","Aubin","Blair","Brook","Célian","Dani","Elya","Evanne",
+  "Flynn","Ilian","Jaden","Kaya","Kim","Lior","Marin","Nino","Oli","Phoenix",
+  "Rio","Soren","Tao","Tegan","Uma","Yael","Zuri","Aris","Bowie","Cruz",
+  "Indigo","Jules","Kiran","Lennon","Malo","Navi","Ori","Pax","Sol","Tali"
+];
+
+function pick(list, seed, offset){
+  return list[(seed + offset) % list.length];
+}
+
+/* ================= ACTION ================= */
+
+const celebrities = {
+  /* ===================== FÉMININS ===================== */
+  "Emma": "Emma Watson",
+  "Lina": "Lina El Arabi",
+  "Clara": "Clara Luciani",
+  "Inès": "Inès Reg",
+  "Camille": "Camille Cottin",
+  "Anna": "Anna Kendrick",
+  "Jade": "Jade Hallyday",
+  "Louise": "Louise Bourgoin",
+  "Mila": "Mila Kunis",
+  "Chloé": "Chloë Grace Moretz",
+  "Léa": "Léa Seydoux",
+  "Zoé": "Zoé Kravitz",
+  "Manon": "Manon Azem",
+  "Sarah": "Sarah Paulson",
+  "Lucie": "Lucie Lucas",
+  "Élise": "Élise Lucet",
+  "Juliette": "Juliette Binoche",
+  "Romane": "Romane Bohringer",
+  "Iris": "Iris Mittenaere",
+  "Eva": "Eva Green",
+  "Alicia": "Alicia Vikander",
+  "Margaux": "Margaux Hemingway",
+  "Nina": "Nina Dobrev",
+  "Noémie": "Noémie Merlant",
+  "Pauline": "Pauline Parmentier",
+  "Adèle": "Adèle Exarchopoulos",
+  "Ambre": "Ambre Chalumeau",
+  "Victoria": "Victoria Beckham",
+  "Célia": "Célia Imrie",
+  "Sofia": "Sofia Coppola",
+  "Maya": "Maya Hawke",
+  "Elena": "Elena Anaya",
+  "Naomi": "Naomi Watts",
+  "Yasmine": "Yasmine Bleeth",
+  "Salomé": "Salomé Dewaels",
+  "Océane": "Océane El Himer",
+  "Mathilde": "Mathilde Seigner",
+  "Clémence": "Clémence Poésy",
+  "Valentine": "Valentine Ferron",
+  "Agathe": "Agathe Rousselle",
+  "Capucine": "Capucine Anav",
+  "Garance": "Garance Marillier",
+  "Aurore": "Aurore Bergé",
+  "Daphné": "Daphné Bürki",
+  "Jeanne": "Jeanne Damas",
+  "Marion": "Marion Cotillard",
+  "Morgane": "Morgane Polanski",
+  "Paloma": "Paloma Faith",
+  "Violette": "Violette Dorange",
+  "Élodie": "Élodie Bouchez",
+  "Anaïs": "Anaïs Demoustier",
+  "Bianca": "Bianca Balti",
+  "Chiara": "Chiara Mastroianni",
+  "Estelle": "Estelle Lefébure",
+  "Florence": "Florence Pugh",
+  "Giulia": "Giulia Sarkozy",
+  "Helena": "Helena Bonham Carter",
+  "Ilona": "Ilona Smet",
+  "Joséphine": "Joséphine Japy",
+  "Maud": "Maud Fontenoy",
+  "Nour": "Nour Arida",
+  "Ophélie": "Ophélie Meunier",
+  "Roxane": "Roxane Mesquida",
+  "Tess": "Tess Ledeux",
+  "Yara": "Yara Shahidi",
+  "Zélie": "Zélie Rixhon",
+
+  /* ===================== MASCULINS ===================== */
+  "Lucas": "Lucas Hedges",
+  "Noah": "Noah Centineo",
+  "Louis": "Louis Garrel",
+  "Ethan": "Ethan Hawke",
+  "Hugo": "Hugo Becker",
+  "Gabriel": "Gabriel Leone",
+  "Léo": "Leonardo DiCaprio",
+  "Arthur": "Arthur Rinderknech",
+  "Adam": "Adam Driver",
+  "Jules": "Jules Benchetrit",
+  "Raphaël": "Raphaël Personnaz",
+  "Maël": "Maël Hirsch",
+  "Nathan": "Nathan Stewart-Jarrett",
+  "Tom": "Tom Holland",
+  "Sacha": "Sacha Baron Cohen",
+  "Théo": "Théo Fernandez",
+  "Mathis": "Mathis Dumas",
+  "Antoine": "Antoine Griezmann",
+  "Paul": "Paul Mescal",
+  "Maxime": "Maxime Gasteuil",
+  "Victor": "Victor Belmondo",
+  "Axel": "Axel Bauer",
+  "Baptiste": "Baptiste Giabiconi",
+  "Romain": "Romain Duris",
+  "Simon": "Simon Baker",
+  "Élias": "Elias Koteas",
+  "Samuel": "Samuel L. Jackson",
+  "Nolan": "Christopher Nolan",
+  "Martin": "Martin Freeman",
+  "Oscar": "Oscar Isaac",
+  "Benjamin": "Benjamin Biolay",
+  "Marius": "Marius Colucci",
+  "Adrien": "Adrien Brody",
+  "Clément": "Clément Remiens",
+  "Robin": "Robin Thicke",
+  "Augustin": "Agustín Galiana",
+  "Gaspard": "Gaspard Ulliel",
+  "Liam": "Liam Hemsworth",
+  "Aaron": "Aaron Taylor-Johnson",
+  "Isaac": "Isaac Hempstead Wright",
+  "Evan": "Evan Peters",
+  "Noé": "Noé Elmaleh",
+  "Émile": "Émile Hirsch",
+  "Timéo": "Timéo Mahaut",
+  "Alexandre": "Alexandre Astier",
+  "Basile": "Basile Boli",
+  "César": "César Domboy",
+  "Damien": "Damien Bonnard",
+  "Florian": "Florian Thauvin",
+  "Guillaume": "Guillaume Canet",
+  "Henri": "Henri Leconte",
+  "Jean": "Jean Dujardin",
+  "Matteo": "Matteo Garrone",
+  "Nicolas": "Nicolas Bedos",
+  "Olivier": "Olivier Giroud",
+  "Pierre": "Pierre Niney",
+  "Quentin": "Quentin Tarantino",
+  "Rémi": "Rémi Buzine",
+  "Tristan": "Tristan Lopin",
+  "Ulysse": "Ulysse Nardin",
+  "Valentin": "Valentin Leonard",
+  "William": "William Levy",
+  "Yanis": "Yanis Marshall",
+  "Zacharie": "Zachary Levi",
+  "Thomas": "Thomas Pesquet",
+
+  /* ===================== MIXTES ===================== */
+  "Alex": "Alex Turner",
+  "Charlie": "Charlie Chaplin",
+  "Sacha": "Sacha Baron Cohen",
+  "Noa": "Noa Kirel",
+  "Andrea": "Andrea Bocelli",
+  "Lou": "Lou Doillon",
+  "Morgan": "Morgan Freeman",
+  "Alix": "Alix Poisson",
+  "Eden": "Eden Hazard",
+  "Robin": "Robin Williams",
+  "Sam": "Sam Smith",
+  "Taylor": "Taylor Swift",
+  "Ariel": "Ariel Winter",
+  "Jay": "Jay-Z",
+  "Gaël": "Gaël Monfils",
+  "Milan": "Milan Kundera",
+  "Eli": "Eli Roth",
+  "Loan": "Loan Tristant",
+  "Sky": "Sky Ferreira",
+  "Jordan": "Jordan Peele",
+  "Cameron": "Cameron Diaz",
+  "Quinn": "Quinn Shephard",
+  "Remy": "Rémy Hii",
+  "Dylan": "Dylan O'Brien",
+  "Alexis": "Alexis Sánchez",
+  "Casey": "Casey Affleck",
+  "Yaël": "Yaël Braun-Pivet",
+  "Nikita": "Nikita Khrouchtchev",
+  "Ezra": "Ezra Miller",
+  "Hayden": "Hayden Christensen",
+  "Logan": "Logan Lerman",
+  "Micah": "Micah Richards",
+  "Rowan": "Rowan Atkinson",
+  "Jamie": "Jamie Dornan",
+  "Lee": "Lee Pace",
+  "Noor": "Noor Tagouri",
+  "Riley": "Riley Keough",
+  "Sidney": "Sidney Poitier",
+  "Toni": "Toni Collette",
+  "Yuri": "Yuri Boyka",
+  "Zen": "Zen Ade"
+};
+
+function celebFor(name){
+  return celebrities[name] || "Personnalité portant ce prénom";
+}
+
+function renderCards(title, names, p1, p2){
+  let html = `<div class="section-title">${title}</div>`;
+  html += `<div class="scroll-hint">Faites glisser →</div>`;
+  html += `<div class="cards">`;
+
+  names.forEach((name, index) => {
+    const score = compatibilityScore(p1, p2, normalize(name));
+    const celeb = celebFor(name);
+    const imgId = `img-${title.replace(/\s/g,'')}-${index}`;
+
+    html += `
+      <div class="card-item">
+        <div class="name-row">
+  <img id="${imgId}" class="photo-mini" alt="${celeb}"
+       onclick="openModal(this.src)">
+  <div class="name">${name}</div>
+</div>
+        <div class="celebrity">${celeb}</div>
+
+        <div class="gauge">
+          <div style="width:${score}%"></div>
+        </div>
+
+        <div class="score">Compatibilité : ${score}%</div>
+        <p>${interpretation(score)}</p>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  return html;
+}
+
+
+function analyser(){
+  const p1raw = document.getElementById("p1").value;
+  const p2raw = document.getElementById("p2").value;
+  if(!p1raw || !p2raw) return;
+
+  const p1 = normalize(p1raw);
+  const p2 = normalize(p2raw);
+  const seed = nameValue(p1 + p2);
+
+  const fem = pickMultiple(female, seed, 3, 10);
+  const mal = pickMultiple(male,   seed, 3, 30);
+  const mix = pickMultiple(mixed,  seed, 3, 60);
+
+  let html = `<h2>Résultats</h2>`;
+
+  html += renderCards("Prénoms féminins compatibles", fem, p1, p2);
+  html += renderCards("Prénoms masculins compatibles", mal, p1, p2);
+  html += renderCards("Prénoms mixtes compatibles", mix, p1, p2);
+
+  html += `<small>Algorithme déterministe — mêmes entrées → mêmes résultats.</small>`;
+
+  const box = document.getElementById("results");
+  box.innerHTML = html;
+  box.style.display = "block";
+  // Indication de scroll mobile
+if (window.innerWidth < 768) {
+  document.querySelectorAll(".cards").forEach(cards => {
+    cards.scrollTo({ left: 40, behavior: "smooth" });
+    setTimeout(() => {
+      cards.scrollTo({ left: 0, behavior: "smooth" });
+    }, 600);
+  });
+}
+  
+  setTimeout(() => {
+  document.querySelectorAll(".card-item").forEach((card, i) => {
+    const celeb = card.querySelector(".celebrity").innerText;
+    const img = card.querySelector("img");
+    if(img) loadCelebrityPhoto(celeb, img.id);
+  });
+}, 100);
+
+}
+
+function pickMultiple(list, seed, count, offset){
+  const results = [];
+  let i = 0;
+
+  while(results.length < count){
+    const index = (seed + offset + i * 7) % list.length;
+    const name = list[index];
+    if(!results.includes(name)){
+      results.push(name);
+    }
+    i++;
+  }
+  return results;
+}
+
+async function loadCelebrityPhoto(name, imgId){
+  const url = "https://fr.wikipedia.org/api/rest_v1/page/summary/" +
+              encodeURIComponent(name);
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if(data.thumbnail && data.thumbnail.source){
+      document.getElementById(imgId).src = data.thumbnail.source;
+    } else {
+      document.getElementById(imgId).style.display = "none";
+    }
+  } catch(e){
+    document.getElementById(imgId).style.display = "none";
+  }
+}
+
+function openModal(src){
+  if(!src) return;
+  const modal = document.getElementById("photoModal");
+  document.getElementById("modalImg").src = src;
+  modal.classList.add("active");
+}
+
+function closeModal(){
+  const modal = document.getElementById("photoModal");
+  modal.classList.remove("active");
+}
+
+</script>
+
+<div id="photoModal" class="modal" onclick="closeModal()">
+  <span>&times;</span>
+  <img id="modalImg">
+</div>
+
+</body>
+</html>

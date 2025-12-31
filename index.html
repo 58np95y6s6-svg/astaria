@@ -817,9 +817,9 @@ function runAnalysis(p1raw, p2raw){
   const p2 = normalize(p2raw);
   const seed = nameValue(p1 + p2);
 
-  let fem = sortByScore(pickMultiple(female, seed, 5, 10), p1, p2);
-  let mal = sortByScore(pickMultiple(male,   seed, 5, 30), p1, p2);
-  let mix = sortByScore(pickMultiple(mixed,  seed, 5, 60), p1, p2);
+  let fem = sortByScore(pickMultiple(female, seed, 6, 10), p1, p2);
+  let mal = sortByScore(pickMultiple(male,   seed, 6, 30), p1, p2);
+  let mix = sortByScore(pickMultiple(mixed,  seed, 6, 60), p1, p2);
 
   const best = findBestName([fem, mal, mix], p1, p2);
 

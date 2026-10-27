@@ -58,7 +58,7 @@ function router() {
   const h = location.hash || "#/";
   const token = ++routeToken;
   const nav = h.startsWith("#/value") ? "value" : h.startsWith("#/journal") ? "journal" : h.startsWith("#/settings") ? "settings" : "home";
-  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("on", a.dataset.nav === nav));
+  document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === nav));
   for (const [re, fn] of routes) {
     const m = h.match(re);
     if (m) { window.scrollTo(0, 0); fn(token, ...m.slice(1)); return; }
@@ -134,15 +134,23 @@ async function viewGame(token, id, teamSel) {
   const t = data.teams[tid];
   const opp = data.teams[tid === g.home.id ? g.away.id : g.home.id];
   const inj = data.injuries[tid] || [];
-  const rosterHtml = t.roster.length ? t.roster.map((p) => {
-    const out = /^out|suspen/i.test(p.status || "");
-    return `<a class="player ${out ? "out" : ""}" href="#/player/${p.id}/${g.id}/${tid}">
+  const isOut = (p) => /^out|suspen/i.test(p.status || "");
+  const row = (p) => `<a class="player ${isOut(p) ? "out" : ""}" href="#/player/${p.id}/${g.id}/${tid}">
       ${img(p.headshot)}
-      <div class="grow"><div class="ell"><b>${esc(p.name)}</b>${statusBadge(p.status)}${p.starts5 >= 3 ? `<span class="badge start">TITU.</span>` : ""}</div>
+      <div class="grow"><div class="ell"><b>${esc(p.name)}</b>${statusBadge(p.status)}</div>
       <div class="meta">${esc(p.pos)}${p.jersey ? ` · #${esc(p.jersey)}` : ""} · ${p.gp} m.j. · ${f1(p.mpg)} min</div></div>
-      <div class="st num"><b>${f1(p.ppg)}</b> pts<br><span class="muted">${f1(p.rpg)} reb · ${f1(p.apg)} pd</span></div>
+      <div class="st num"><b>${f1(p.ppg)}</b> pts<br>${f1(p.rpg)} reb · ${f1(p.apg)} pd</div>
     </a>`;
-  }).join("") : `<div class="empty">Effectif indisponible.</div>`;
+  // Cinq probable : les titulaires récents disponibles, sinon les 5 plus gros temps de jeu.
+  const avail = t.roster.filter((p) => !isOut(p));
+  let five = avail.filter((p) => p.starts5 >= 3).slice(0, 5);
+  if (five.length < 5) five = [...five, ...avail.filter((p) => !five.includes(p))].slice(0, 5);
+  const bench = avail.filter((p) => !five.includes(p));
+  const outs = t.roster.filter(isOut);
+  const group = (title, list, extra = "") => list.length ? `<div class="card"><div class="group-title"><span>${title}</span><span>${extra}</span></div>${list.map(row).join("")}</div>` : "";
+  const rosterHtml = t.roster.length
+    ? group("Cinq probable", five, `${five.reduce((s, p) => s + p.ppg, 0).toFixed(0)} pts/m`) + group("Banc", bench, `${bench.length} joueurs`) + group("Absents", outs)
+    : `<div class="card empty">Effectif indisponible.</div>`;
   const chips = [
     t.b2b && `<span class="chip warn">Back-to-back</span>`,
     opp.b2b && `<span class="chip good">Adversaire en back-to-back</span>`,
@@ -151,7 +159,7 @@ async function viewGame(token, id, teamSel) {
     g.total && `<span class="chip">Total ${g.total}</span>`,
   ].filter(Boolean).join("");
   $app.innerHTML = `
-    <a href="#/day/${g.dateKey}" class="muted small">‹ Matchs du jour</a>
+    <a href="#/day/${g.dateKey}" class="back">‹ Matchs du jour</a>
     <div class="card game" style="cursor:default">
       <div class="team">${img(g.away.logo)}<div class="nm ell">${esc(g.away.short)}</div></div>
       <div class="mid"><div class="time">${g.state === "pre" ? parisTime(g.date) : `${g.away.score ?? ""} – ${g.home.score ?? ""}`}</div><div class="muted small">${parisDay(g.date)}</div></div>
@@ -162,9 +170,9 @@ async function viewGame(token, id, teamSel) {
     </div>
     <div class="chips">${chips}</div>
     ${inj.length ? `<div class="note"><b>Infirmerie :</b> ${inj.map((i) => `${esc(i.name)} (${esc(i.status)})`).join(", ")}</div>` : ""}
-    <div class="card">${rosterHtml}</div>
-    <div class="row wrap"><a class="btn" href="#/value" data-scan="${g.id}">⚡ Value de ce match</a>
-    <span class="muted small">Données : ${data.data.gamesTotal} matchs analysés${data.data.updatedAt ? `, mis à jour ${new Date(data.data.updatedAt).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}` : ""}</span></div>`;
+    ${rosterHtml}
+    <a class="fab" href="#/value" data-scan="${g.id}">⚡ Value</a>
+    <div class="row wrap"><span class="muted small">Données : ${data.data.gamesTotal} matchs analysés${data.data.updatedAt ? `, mis à jour ${new Date(data.data.updatedAt).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}` : ""}</span></div>`;
   $app.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => { location.hash = `#/game/${g.id}/${b.dataset.team}`; }));
   $app.querySelector("[data-scan]")?.addEventListener("click", () => { valueState.only = g.id; });
 }
@@ -203,7 +211,7 @@ function renderPlayer(st) {
   const ctx = { logs: d.logs, prior: d.prior, factors: d.opp.factors, pace: d.pace, home: d.home, b2b: d.b2b, spread: d.spread, injuries: d.injuries, minutesOverride: playerState.minutes };
   const proj = project(ctx);
   const name = d.player?.name || "Joueur";
-  const back = `<a href="#/game/${g.id}/${d.teamId}" class="muted small">‹ ${esc(d.teamName || "Effectif")}</a>`;
+  const back = `<a href="#/game/${g.id}/${d.teamId}" class="back">‹ ${esc(d.teamName || "Effectif")}</a>`;
   if (!proj) {
     $app.innerHTML = `${back}<div class="card empty">Pas encore de données pour ${esc(name)} cette saison (ni la précédente).</div>`;
     return;

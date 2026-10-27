@@ -1,7 +1,7 @@
 // Journal des paris, stocké sur l'appareil (localStorage) + export / import.
 // Règlement automatique à partir des feuilles de match publiées par GitHub Actions.
 import { getCore, playerLogs, getTeamLogs } from "./data.js";
-import { gradeTeam } from "./team.js";
+import { gradeTeam, teamLabel } from "./team.js";
 import { valueOf } from "./model.js";
 import { normName } from "./value.js";
 import { seasonForDate, shiftDateKey } from "./factors.js";
@@ -25,7 +25,7 @@ export function addBet(b) {
   };
   if (b.kind === "team") {
     // Pari équipe : vainqueur, handicap, total du match, total d'une équipe.
-    Object.assign(bet, { kind: "team", teamId: b.teamId ?? null, oppId: b.oppId ?? null, label: String(b.label || ""),
+    Object.assign(bet, { kind: "team", teamId: b.teamId ?? null, oppId: b.oppId ?? null, teamAbbr: b.teamAbbr || null, label: String(b.label || ""),
       side: b.side ?? null, line: b.line == null ? null : Number(b.line), playerId: "team" });
   }
   const bets = loadBets();
@@ -50,11 +50,16 @@ export function updateBet(id, patch) {
   const bets = loadBets();
   const b = bets.find((x) => x.id === id);
   if (!b) return;
-  for (const k of b.type === "combo" ? ["stake", "odds"] : ["stake", "odds", "line"]) if (Number.isFinite(patch[k]) && patch[k] > 0) b[k] = patch[k];
+  // Handicap négatif : le clavier iPhone n'a pas de « − », on garde le signe d'origine.
+  if (b.kind === "team" && b.market === "spread" && b.line < 0 && patch.line > 0) patch.line = -patch.line;
+  for (const k of b.type === "combo" ? ["stake", "odds"] : ["stake", "odds", "line"]) if (Number.isFinite(patch[k]) && (patch[k] > 0 || (k === "line" && b.kind === "team" && patch[k] < 0))) b[k] = patch[k];
   if (b.type === "combo") { save(bets); return; }
   if (patch.side === "over" || patch.side === "under") b.side = patch.side;
   if (patch.book) b.book = patch.book;
   if (b.kind === "team") {
+    // Libellé recalculé (ligne ou côté modifiés).
+    const abbr = b.teamAbbr || String(b.label || "").split(" ")[0];
+    if (b.market !== "total" || b.label) b.label = teamLabel(b, { home: { id: b.teamId, abbr }, away: { id: b.oppId, abbr: "" } });
     if (b.scoreT != null && !b.manual) { const st = gradeTeam(b, b.scoreT, b.scoreO); if (st !== "check") b.status = st; }
     save(bets); return;
   }
@@ -156,7 +161,7 @@ export async function settleAll() {
   return bets;
 }
 
-const LEG_FIELDS = ["kind", "teamId", "oppId", "label", "resultText", "scoreT", "scoreO", "player", "playerId", "eventId", "season", "gameDate", "matchup", "market", "side", "line", "odds", "book", "pFinal", "pModel", "status", "result", "settledAt"];
+const LEG_FIELDS = ["kind", "teamId", "oppId", "teamAbbr", "label", "resultText", "scoreT", "scoreO", "player", "playerId", "eventId", "season", "gameDate", "matchup", "market", "side", "line", "odds", "book", "pFinal", "pModel", "status", "result", "settledAt"];
 
 // Regroupe des paris simples en cours en un combiné (cote = produit des cotes).
 export function createCombo(ids, stake) {

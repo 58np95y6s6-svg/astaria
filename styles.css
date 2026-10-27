@@ -319,3 +319,9 @@ img.av, .ph.av { width: 42px; height: 42px; border-radius: 14px; object-fit: cov
 .combobar { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 15; background: var(--navy); color: #fff; border-radius: 18px; padding: 12px 14px; box-shadow: 0 10px 30px rgba(20, 24, 60, .35); margin: 12px 0; }
 .combobar input { background: var(--navy2); color: #fff; }
 .combobar input::placeholder { color: var(--navy-muted); }
+
+/* Sélections de combiné : le texte passe à la ligne, la cote reste visible */
+.jlegs { grid-template-columns: minmax(0, 1fr); }
+.jleg { min-width: 0; align-items: flex-start; }
+.jleg .grow { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; }
+.jleg .num { flex: none; padding-left: 6px; }

@@ -317,7 +317,7 @@ function mountTeamBets(data) {
           <div class="row between"><b>Mon pari sur le match</b><span class="small muted">calcul instantané</span></div>
           <div class="form" style="margin-top:8px">
             <div><label>Type</label><select id="tmk">${[["ml", "Vainqueur"], ["spreadPlus", "Gagne ou perd de X pts ou −"], ["spreadMinus", "Gagne de X pts ou +"], ["lead", "Gagne ou possède une avance de X pts"], ["total", "Total du match"], ["teamtotal", "Total d'une équipe"]].map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></div>
-            <div data-tf="team"><label>Équipe</label><select id="tteam"><option value="${g.home.id}">${esc(g.home.abbr)}</option><option value="${g.away.id}">${esc(g.away.abbr)}</option></select></div>
+            <div data-tf="team"><label>Équipe</label><select id="tteam"><option value="${g.home.id}">${esc(g.home.short || g.home.abbr)} (domicile)</option><option value="${g.away.id}">${esc(g.away.short || g.away.abbr)} (extérieur)</option></select></div>
             <div data-tf="side" hidden><label>Côté</label><select id="tside"><option value="over">Plus de</option><option value="under">Moins de</option></select></div>
             <div data-tf="line" hidden><label id="tlinel">Ligne</label><input type="number" inputmode="decimal" step="0.5" id="tline"></div>
             <div><label>Cote</label><input type="number" inputmode="decimal" step="0.01" id="todds" placeholder="1.85"></div>
@@ -391,7 +391,7 @@ function mountTeamBets(data) {
       const team = teamId === g.home.id ? g.home : g.away;
       journalAdd({ kind: "team", eventId: g.id, season: g.season, gameDate: g.dateKey, matchup: `${g.away.abbr} @ ${g.home.abbr}`,
         player: r.market === "total" ? `${g.away.abbr} @ ${g.home.abbr}` : team.name, playerId: "team",
-        market: r.market, teamId, oppId: teamId === g.home.id ? g.away.id : g.home.id, side: r.side, line: r.line,
+        market: r.market, teamId, oppId: teamId === g.home.id ? g.away.id : g.home.id, teamAbbr: team.abbr, side: r.side, line: r.line,
         odds: r.odds, book: r.book, stake: r.stake, pModel: r.pModel, pFinal: r.pFinal, ev: r.ev, label: r.label || teamLabel(r, g) });
       toast(`Ajouté au journal ✓ (${eur(r.stake)})`);
     } catch (e) { toast(e.message); }

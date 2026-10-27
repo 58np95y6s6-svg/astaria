@@ -48,9 +48,18 @@ function summary(g) {
   };
 }
 
-export function installMockFetch() {
+import fs from "node:fs";
+import path from "node:path";
+
+// dataDir : dossier servi à l'adresse https://data.test/ (simule raw.githubusercontent.com).
+export function installMockFetch(dataDir) {
 globalThis.fetch = async (input) => {
   const u = new URL(String(input));
+  if (u.hostname === "data.test") {
+    const f = path.join(dataDir, decodeURIComponent(u.pathname));
+    if (!fs.existsSync(f)) return new Response("404", { status: 404 });
+    return new Response(fs.readFileSync(f), { status: 200, headers: { "content-type": "application/json" } });
+  }
   const ok = (body, headers = {}) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json", ...headers } });
   if (u.pathname.endsWith("/scoreboard")) {
     const d = u.searchParams.get("dates");

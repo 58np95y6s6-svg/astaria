@@ -24,33 +24,8 @@ export async function getJSON(url, { retries = 2, timeoutMs = 8000 } = {}) {
   throw lastErr;
 }
 
-// Saison ESPN = année de fin (2026-27 -> 2027).
-export function seasonForDate(d = new Date()) {
-  const y = d.getUTCFullYear();
-  return d.getUTCMonth() >= 7 ? y + 1 : y;
-}
-
-// Date "jour NBA" (heure de New York) au format YYYYMMDD.
-export function etDateKey(d = new Date()) {
-  const s = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(d);
-  return s.replaceAll("-", "");
-}
-
-export function shiftDateKey(key, days) {
-  const d = new Date(Date.UTC(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8)));
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10).replaceAll("-", "");
-}
-
-export function posGroup(abbr = "") {
-  const a = String(abbr).toUpperCase();
-  if (a === "C" || a === "FC" || a === "CF") return "C";
-  if (a.includes("G")) return "G";
-  if (a.includes("F")) return "F";
-  return "F";
-}
+export { seasonForDate, etDateKey, shiftDateKey, posGroup } from "../../js/factors.js";
+import { posGroup } from "../../js/factors.js";
 
 function teamLite(c) {
   const t = c?.team || {};

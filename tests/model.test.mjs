@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { negBin, probLine, project, noVig, kelly, MARKETS } from "../public/js/model.js";
-import { evaluate } from "../public/js/value.js";
+import { negBin, probLine, project, noVig, kelly, MARKETS } from "../js/model.js";
+import { evaluate } from "../js/value.js";
 
 test("loi binomiale négative : somme à 1 et bonne moyenne", () => {
   for (const [mu, phi] of [[24.3, 2], [5.2, 1.5], [0.8, 1.1], [1.7, 1]]) {

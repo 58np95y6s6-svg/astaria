@@ -1,0 +1,66 @@
+# Met à jour les données NBA (ESPN) et les publie dans la branche "data",
+# lue directement par le site (GitHub Pages).
+name: Mise à jour des données NBA
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"   # toutes les 30 min
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["scripts/**", "js/factors.js", ".github/workflows/update-data.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Récupérer la branche data (ou la créer)
+        run: |
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git clone --depth 1 --branch data "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data-out
+          else
+            mkdir data-out && cd data-out && git init -q -b data
+            git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Mettre à jour
+        env:
+          DATA_DIR: data-out
+        run: node scripts/update.mjs
+
+      - name: Publier
+        working-directory: data-out
+        run: |
+          git config user.name "astaria-bot"
+          git config user.email "astaria-bot@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "Rien de nouveau"; exit 0; fi
+          # Un seul commit (historique écrasé) pour garder la branche légère.
+          git commit -q -m "Données $(date -u +%Y-%m-%dT%H:%MZ)"
+          tree=$(git rev-parse HEAD^{tree})
+          commit=$(git commit-tree "$tree" -m "Données $(date -u +%Y-%m-%dT%H:%MZ)")
+          git push -f origin "$commit:refs/heads/data"
+
+  tests:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test

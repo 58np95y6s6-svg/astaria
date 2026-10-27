@@ -1,5 +1,8 @@
 import { MARKETS, project, probLine, averages, shotProfile, valueOf } from "./model.js";
 import { evaluate, tag, BOOK_LABEL, FR_BOOKS, normName } from "./value.js";
+import { getDay, getGameData, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
+import { getGameOdds, quota as oddsQuota } from "./odds.js";
+import { addBet as journalAdd, deleteBet, settleAll, exportBets, importBets } from "./journal.js";
 
 // ---------- utilitaires ----------
 const $app = document.getElementById("app");
@@ -11,20 +14,10 @@ const sgnPct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${(x * 100).toFi
 const GROUP_LABEL = { G: "arrières", F: "ailiers", C: "pivots" };
 
 const settings = (() => {
-  const def = { bankroll: 100, wModel: 0.6, journalKey: "", frOnly: false };
+  const def = { bankroll: 100, wModel: 0.6, oddsKey: "", frOnly: false };
   try { return { ...def, ...JSON.parse(localStorage.getItem("astaria-settings") || "{}") }; } catch { return def; }
 })();
 function saveSettings() { try { localStorage.setItem("astaria-settings", JSON.stringify(settings)); } catch {} }
-
-async function api(path, opts = {}) {
-  const headers = { ...(opts.headers || {}) };
-  if (settings.journalKey) headers["x-journal-key"] = settings.journalKey;
-  if (opts.body && typeof opts.body !== "string") { headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(opts.body); }
-  const res = await fetch(path, { ...opts, headers });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
-  return data;
-}
 
 function toast(msg) {
   const t = document.createElement("div");
@@ -90,9 +83,11 @@ async function viewHome(token, day) {
   $app.innerHTML = `<h1>Matchs NBA</h1><div class="days">${strip}</div><p class="muted small">Date US (heure de New York). Horaires affichés à l'heure de Paris.</p><div id="games">${loader()}</div>`;
   setTimeout(() => document.querySelector(".day.on")?.scrollIntoView({ inline: "center", block: "nearest" }), 0);
   try {
-    const { games } = await api(`/api/games?date=${sel}`);
+    const day = await getDay(sel);
     if (stale(token)) return;
     const el = document.getElementById("games");
+    if (!day) { el.innerHTML = `<div class="card empty">Données pas encore disponibles pour ce jour. Elles sont mises à jour automatiquement toutes les 30 min.</div>`; return; }
+    const games = day.games || [];
     if (!games.length) { el.innerHTML = `<div class="card empty">Aucun match ce jour-là.</div>`; return; }
     el.innerHTML = games.map(gameCard).join("");
   } catch (e) { if (!stale(token)) document.getElementById("games").innerHTML = errorBox(e); }
@@ -116,7 +111,15 @@ const gameCache = new Map();
 async function getGame(id) {
   const c = gameCache.get(id);
   if (c && Date.now() - c.at < 120e3) return c.data;
-  const data = await api(`/api/game?id=${id}`);
+  const gd = await getGameData(id);
+  const g = gd.game;
+  const [hr, ar] = await Promise.all([teamRoster(gd, g.home), teamRoster(gd, g.away)]);
+  const tc = (t) => teamContext(gd.core, g, t.id);
+  const data = {
+    gd, game: g, injuries: gd.injuries,
+    teams: { [g.home.id]: { ...g.home, ...tc(g.home), roster: hr }, [g.away.id]: { ...g.away, ...tc(g.away), roster: ar } },
+    data: { gamesTotal: Object.keys(gd.core.processed || {}).length, updatedAt: gd.updatedAt, leaguePace: tc(g.home).leaguePace },
+  };
   gameCache.set(id, { at: Date.now(), data });
   return data;
 }
@@ -174,8 +177,9 @@ async function viewPlayer(token, pid, gid, tid) {
   playerState.minutes = null;
   let data, oddsP;
   try {
-    oddsP = api(`/api/odds?game=${gid}`).catch((e) => ({ available: false, reason: "error", error: e.message }));
-    data = await api(`/api/player?id=${pid}&game=${gid}&team=${tid}`);
+    const G = await getGame(gid);
+    oddsP = getGameOdds(G.game, settings.oddsKey); // les cotes ne sont demandées qu'à l'ouverture d'un joueur
+    data = await buildContext(G.gd, pid, tid);
   } catch (e) { if (!stale(token)) $app.innerHTML = errorBox(e); return; }
   if (stale(token)) return;
   const st = { data, odds: null };
@@ -377,7 +381,7 @@ function renderPlayer(st) {
   $app.querySelectorAll("[data-bet]").forEach((b) => b.addEventListener("click", () => addBet(JSON.parse(b.dataset.bet), d)));
   $app.querySelector("[data-refresh-odds]")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
-    st.odds = await api(`/api/odds?game=${g.id}&force=1`).catch((er) => ({ available: false, reason: "error", error: er.message }));
+    st.odds = await getGameOdds(g, settings.oddsKey, { force: true });
     renderPlayer(st);
   });
 }
@@ -396,7 +400,7 @@ function oddsStatus(o) {
       · ${fr ? `🇫🇷 ${esc(fr)}` : "aucun book FR n'a publié de cotes joueurs sur ce match"}${o.quota?.remaining ? ` · ${o.quota.remaining} crédits restants` : ""}
       <button class="btn sm" data-refresh-odds style="margin-left:6px">Rafraîchir</button></div>`;
   }
-  const msg = { no_key: "Clé The Odds API non configurée : saisis tes cotes à la main.", event_not_found: "Match pas encore listé par le fournisseur de cotes.", finished: "Match terminé.", error: `Cotes indisponibles : ${o.error || ""}` }[o.reason] || "Cotes indisponibles.";
+  const msg = { no_key: "Pas de clé The Odds API (⚙︎ Réglages) : saisis tes cotes Winamax/Betclic à la main ci-dessous.", event_not_found: "Match pas encore listé par le fournisseur de cotes.", finished: "Match terminé.", error: `Cotes indisponibles : ${o.error || ""}` }[o.reason] || "Cotes indisponibles.";
   return `<div class="note warn">${esc(msg)}</div>`;
 }
 
@@ -419,10 +423,10 @@ async function addBet(b, d) {
   const stake = prompt(`Mise pour ${MARKETS[b.market].label} ${b.side === "over" ? "Over" : "Under"} ${b.line} @ ${b.odds} ?`, String(b.stake || 1));
   if (stake == null) return;
   try {
-    await api("/api/journal", { method: "POST", body: {
+    journalAdd({
       ...b, stake: parseFloat(stake) || 1, eventId: d.game.id, season: d.game.season, gameDate: d.game.dateKey,
       matchup: `${d.game.away.abbr} @ ${d.game.home.abbr}`, playerId: d.player.id, player: d.player.name,
-    } });
+    });
     toast("Ajouté au journal ✓");
   } catch (e) { toast(e.message); }
 }
@@ -472,14 +476,15 @@ async function scan(token, ids) {
   try {
     if (!ids) {
       status.textContent = "Liste des matchs…";
-      const { games } = await api(`/api/games?date=${etKey()}`);
+      const games = (await getDay(etKey()))?.games || [];
       ids = games.filter((g) => g.state === "pre").map((g) => g.id);
       if (!ids.length) { status.textContent = "Aucun match à venir aujourd'hui."; return; }
     }
     for (const [i, id] of ids.entries()) {
       if (stale(token)) return;
       status.textContent = `Scan ${i + 1}/${ids.length}…`;
-      const r = await api(`/api/scan?game=${id}`).catch((e) => ({ error: e.message, picks: [] }));
+      const r = await scanGame(id).catch((e) => ({ error: e.message, picks: [] }));
+      if (r.error) status.textContent = r.error;
       valueState.picks = valueState.picks.filter((p) => p.gameId !== id);
       const matchup = r.game ? `${r.game.away.abbr} @ ${r.game.home.abbr}` : "";
       for (const p of r.picks || []) valueState.picks.push({ ...p, gameId: id, matchup, season: r.game?.season, gameDate: r.game?.dateKey });
@@ -490,6 +495,36 @@ async function scan(token, ids) {
     }
     status.textContent = `${valueState.scanned.size} match(s) scanné(s)${valueState.quota ? ` · ${valueState.quota} crédits restants` : ""}.`;
   } catch (e) { status.textContent = e.message; } finally { btn.disabled = false; }
+}
+
+// Scan d'un match : cotes de tous les joueurs → projection → paris classés par value.
+async function scanGame(id) {
+  const G = await getGame(id);
+  const gd = G.gd, g = G.game;
+  const odds = await getGameOdds(g, settings.oddsKey);
+  if (!odds.available) return { game: g, picks: [], odds };
+  const byName = new Map();
+  for (const [tid, r] of Object.entries(gd.rosters || {})) for (const p of r) byName.set(normName(p.name), { id: p.id, tid });
+  for (const [pid, p] of Object.entries(gd.core.players)) {
+    if ((p.teamId === g.home.id || p.teamId === g.away.id) && !byName.has(normName(p.name))) byName.set(normName(p.name), { id: pid, tid: p.teamId });
+  }
+  const picks = [];
+  await Promise.all(Object.entries(odds.players).map(async ([n, op]) => {
+    const who = byName.get(n);
+    if (!who) return;
+    const ctx = await buildContext(gd, who.id, who.tid);
+    const inj = ctx.playerInjury;
+    if (inj && /^out/i.test(inj.status)) return;
+    const proj = project(ctx);
+    if (!proj) return;
+    for (const [mk, offers] of Object.entries(op.markets)) {
+      if (!proj.stats[mk]) continue;
+      for (const b of evaluate(mk, proj.stats[mk], offers, { wModel: settings.wModel }).slice(0, 2)) {
+        picks.push({ ...b, playerId: who.id, player: ctx.player.name, teamId: ctx.teamId, status: inj?.status || null });
+      }
+    }
+  }));
+  return { game: g, picks: picks.sort((a, b) => b.ev - a.ev), odds };
 }
 
 function renderPicks() {
@@ -512,10 +547,9 @@ function renderPicks() {
 // ---------- Journal ----------
 async function viewJournal(token) {
   $app.innerHTML = `<h1>Journal des paris</h1>${loader()}`;
-  let data;
-  try { data = await api("/api/journal"); } catch (e) { if (!stale(token)) $app.innerHTML = `<h1>Journal des paris</h1>${errorBox(e)}<p class="muted small">Si le journal est protégé, renseigne la clé dans ⚙︎ Réglages.</p>`; return; }
+  let bets;
+  try { bets = await settleAll(); } catch (e) { if (!stale(token)) $app.innerHTML = `<h1>Journal des paris</h1>${errorBox(e)}`; return; }
   if (stale(token)) return;
-  const bets = data.bets || [];
   const settled = bets.filter((b) => ["won", "lost", "push"].includes(b.status));
   const staked = settled.reduce((s, b) => s + b.stake, 0);
   const profit = settled.reduce((s, b) => s + (b.status === "won" ? b.stake * (b.odds - 1) : b.status === "lost" ? -b.stake : 0), 0);
@@ -544,10 +578,15 @@ async function viewJournal(token) {
       <div class="grow"><div class="main">${esc(b.player)} — ${esc(MARKETS[b.market]?.label || b.market)} ${b.side === "over" ? "Over" : "Under"} ${b.line}</div>
       <div class="small muted">${esc(b.matchup)} · ${b.gameDate ? `${b.gameDate.slice(6, 8)}/${b.gameDate.slice(4, 6)}` : ""} · ${esc(BOOK_LABEL[b.book] || b.book)} · mise ${b.stake}${b.pFinal != null ? ` · proba ${pct(b.pFinal)}` : ""}${b.result != null ? ` · résultat <b>${b.result}</b>` : ""}</div></div>
       <div class="center"><div class="odds num">${f2(b.odds)}</div><span class="chip ${cls[b.status]}">${label[b.status] || b.status}</span><br><button class="btn sm" data-del="${b.id}" style="margin-top:4px">✕</button></div></div>`).join("") : `<div class="empty">Aucun pari. Ajoute-en depuis une fiche joueur (« + Journal »).</div>`}</div>
-    <p class="muted small">Les paris se règlent automatiquement quand la feuille de match est intégrée (toutes les 30 min).</p>`;
+    <p class="muted small">Les paris se règlent automatiquement quand la feuille de match est intégrée (toutes les 30 min). Le journal est enregistré sur cet appareil : exporte-le pour le sauvegarder ou le transférer.</p>
+    <div class="row wrap"><button class="btn sm" id="jexp">⬇︎ Exporter</button><label class="btn sm">⬆︎ Importer<input type="file" id="jimp" accept="application/json" hidden></label></div>`;
+  document.getElementById("jexp").addEventListener("click", exportBets);
+  document.getElementById("jimp").addEventListener("change", async (e) => {
+    try { const n = await importBets(e.target.files[0]); toast(`${n} pari(s) importé(s)`); viewJournal(routeToken); } catch (er) { toast(er.message); }
+  });
   $app.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Supprimer ce pari ?")) return;
-    await api(`/api/journal?id=${b.dataset.del}`, { method: "DELETE" }).catch((e) => toast(e.message));
+    deleteBet(b.dataset.del);
     viewJournal(routeToken);
   }));
 }
@@ -558,39 +597,32 @@ async function viewSettings(token) {
     <div class="card form">
       <div><label>Bankroll (unités)</label><input type="number" id="bk" value="${settings.bankroll}" min="1"></div>
       <div><label>Poids du modèle vs marché : <b id="wmv">${Math.round(settings.wModel * 100)} %</b></label><input type="range" id="wm" min="0.2" max="1" step="0.05" value="${settings.wModel}"></div>
-      <div><label>Clé du journal (si protégé)</label><input type="password" id="jk" value="${esc(settings.journalKey)}" autocomplete="off"></div>
+      <div><label>Clé The Odds API</label><input type="password" id="ok" value="${esc(settings.oddsKey)}" autocomplete="off" placeholder="colle ta clé ici"></div>
     </div>
+    <div class="note">Clé gratuite sur <a href="https://the-odds-api.com/#get-access" target="_blank" rel="noopener" style="text-decoration:underline">the-odds-api.com</a> (500 crédits/mois, ≈10 par match ouvert). Elle reste sur cet appareil. Sans clé, tu peux saisir tes cotes à la main.</div>
     <div class="note">Le poids du modèle règle la confiance accordée à nos projections face au consensus des bookmakers (Pinnacle compte triple). 60 % est un bon départ ; ajuste selon la fiabilité mesurée dans le Journal.</div>
     <div class="card" id="dstatus">${loader("État des données…")}</div>`;
   document.getElementById("bk").addEventListener("change", (e) => { settings.bankroll = Math.max(1, +e.target.value || 100); saveSettings(); toast("Enregistré"); });
   const wm = document.getElementById("wm");
   wm.addEventListener("input", () => { document.getElementById("wmv").textContent = `${Math.round(wm.value * 100)} %`; });
   wm.addEventListener("change", () => { settings.wModel = +wm.value; saveSettings(); toast("Enregistré"); });
-  document.getElementById("jk").addEventListener("change", (e) => { settings.journalKey = e.target.value.trim(); saveSettings(); toast("Enregistré"); });
+  document.getElementById("ok").addEventListener("change", (e) => { settings.oddsKey = e.target.value.trim(); saveSettings(); toast("Clé enregistrée"); });
   renderStatus(token);
 }
 
-async function renderStatus(token, msg = "") {
+async function renderStatus(token) {
   const el = document.getElementById("dstatus");
   try {
-    const s = await api("/api/status");
+    const s = await getMeta();
     if (stale(token)) return;
+    const q = oddsQuota();
+    const runUrl = REPO_URL ? `${REPO_URL}/actions/workflows/update-data.yml` : null;
     el.innerHTML = `<h2>Données</h2>
-      <div class="small">Saison ${s.season - 1}-${String(s.season).slice(2)} · <b>${s.gamesTotal}</b> matchs analysés · ${s.players} joueurs · ${s.teams} équipes</div>
-      <div class="small muted">Dernière mise à jour : ${s.updatedAt ? new Date(s.updatedAt).toLocaleString("fr-FR", { timeZone: "Europe/Paris" }) : "jamais"} (automatique toutes les 30 min)</div>
-      <div class="small">Cotes : ${s.oddsKey ? "✅ clé The Odds API configurée" : "❌ pas de clé (saisie manuelle uniquement)"} · Journal : ${s.journalProtected ? "🔒 protégé" : "ouvert"}</div>
-      <button class="btn" id="upd" style="margin-top:10px">Mettre à jour maintenant</button> <span class="small muted" id="updmsg">${esc(msg)}</span>`;
-    document.getElementById("upd").addEventListener("click", async (e) => {
-      e.target.disabled = true;
-      const m = document.getElementById("updmsg");
-      for (let i = 0; i < 40; i++) {
-        const r = await api("/api/status", { method: "POST" }).catch((er) => ({ error: er.message }));
-        if (r.error) { m.textContent = r.error; break; }
-        m.textContent = `${r.gamesTotal} matchs… (${r.pendingDates} jour(s) restant(s))`;
-        if (!r.pendingDates || (!r.processedNow && !r.datesScanned)) break;
-      }
-      renderStatus(token, "Terminé ✓");
-    });
+      ${s ? `<div class="small">Saison ${s.season - 1}-${String(s.season).slice(2)} · <b>${s.gamesTotal}</b> matchs analysés · ${s.players} joueurs · ${s.teams} équipes</div>
+      <div class="small muted">Dernière mise à jour : ${new Date(s.updatedAt).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })} (automatique toutes les 30 min via GitHub)</div>` : `<div class="small">Pas encore de données : la première mise à jour GitHub n'a pas encore tourné.</div>`}
+      <div class="small">Cotes : ${settings.oddsKey ? `✅ clé enregistrée${q?.remaining ? ` · ${q.remaining} crédits restants` : ""}` : "❌ pas de clé (saisie manuelle uniquement)"}</div>
+      ${runUrl ? `<a class="btn" style="margin-top:10px" href="${runUrl}" target="_blank" rel="noopener">Forcer une mise à jour (GitHub)</a>
+      <div class="small muted" style="margin-top:6px">Sur GitHub : « Run workflow » → « Run workflow ».</div>` : ""}`;
   } catch (e) { el.innerHTML = errorBox(e); }
 }
 

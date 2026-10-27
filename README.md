@@ -1,6 +1,8 @@
 # Astaria NBA
 
-Outil de projection de stats joueurs NBA et de détection de paris « value » (Winamax, Betclic…).
+Outil de projection de stats joueurs NBA et de détection de paris « value » (Winamax, Betclic…). Tout tourne sur GitHub, sans serveur ni compte supplémentaire.
+
+## Fonctionnalités
 
 - **Matchs jour après jour**, puis compositions des deux équipes (comme sur Winamax), avec les blessés.
 - **Fiche joueur** : saison en cours, 10 derniers matchs, saison passée, minutes projetées (ajustables).
@@ -9,28 +11,29 @@ Outil de projection de stats joueurs NBA et de détection de paris « value » (
 - **Cotes** via The Odds API, chargées seulement à l'ouverture d'un joueur, avec un cache de 10 min par match. Tu peux aussi saisir à la main une cote Winamax ou Betclic.
 - **Value** : probabilité × cote − 1, avec mélange du modèle et du consensus du marché (Pinnacle pèse triple) et mise conseillée (Kelly ¼, plafonnée à 3 %).
 - **Top value du jour** : scan de tous les matchs à venir.
-- **Journal** : les paris se règlent automatiquement, avec suivi du ROI et de la fiabilité du modèle (probabilité annoncée comparée au résultat réel).
+- **Journal** : les paris se règlent automatiquement, avec suivi du ROI et de la fiabilité du modèle. Il est enregistré sur l'appareil, avec export et import.
+
+## Utilisation
+
+1. Ouvre le site GitHub Pages du dépôt.
+2. ⚙︎ Réglages : colle ta clé gratuite The Odds API (https://the-odds-api.com, 500 crédits par mois, environ 10 par match ouvert). Elle reste sur ton appareil.
+3. Les données se mettent à jour seules toutes les 30 min. Pour forcer une mise à jour : onglet **Actions** du dépôt → « Mise à jour des données NBA » → **Run workflow**.
 
 ## Comment ça marche
 
-| Étape | Détail |
+| Élément | Où |
 |---|---|
-| Données | API publiques ESPN : calendrier, feuilles de match, effectifs, blessures. Une tâche planifiée Netlify agrège toutes les feuilles de match de la saison toutes les 30 min dans Netlify Blobs. |
-| Défense par poste | Pour chaque équipe : stats par minute accordées aux arrières, ailiers et pivots, divisées par la moyenne de la ligue, avec un rétrécissement vers 1 tant que l'échantillon est petit. |
-| Taux du joueur | Stats par minute : 55 % sur les 10 derniers et 45 % sur la saison, avec un a priori tiré de la saison passée qui s'efface au fil des matchs. |
-| Minutes | Moyenne pondérée, puis ajustements : back-to-back, risque de large écart au score, coéquipiers absents au même poste. |
-| Distribution | Loi binomiale négative (dispersion mesurée sur l'historique du joueur), qui donne P(Over) et P(Under) pour chaque ligne. |
+| Site | GitHub Pages : `index.html`, `js/`, `styles.css` |
+| Données NBA | GitHub Actions (`.github/workflows/update-data.yml`) lance `scripts/update.mjs` toutes les 30 min : feuilles de match ESPN agrégées, effectifs, blessés, saison précédente. Le résultat est publié dans la branche `data`, lue directement par le site. |
+| Cotes | The Odds API, appelée par le navigateur (`js/odds.js`) |
+| Modèle | `js/model.js` (projections) et `js/value.js` (value, Kelly) |
 
-Le modèle est dans `public/js/model.js`, la logique de value dans `public/js/value.js`. Le même code tourne dans le navigateur et sur le serveur.
+Le modèle :
 
-## Mise en ligne (Netlify)
-
-1. Sur Netlify : **Add new site → Import an existing project → GitHub →** ce dépôt. Les réglages sont lus depuis `netlify.toml`, rien à changer.
-2. **Site configuration → Environment variables** :
-   - `ODDS_API_KEY` : clé gratuite sur https://the-odds-api.com (500 crédits/mois ; environ 10 crédits par match ouvert).
-   - `JOURNAL_KEY` (conseillé) : un mot de passe pour protéger ton journal. À saisir ensuite dans ⚙︎ Réglages.
-   - Optionnels : `ODDS_BOOKMAKERS` (liste de bookmakers), `ODDS_MARKETS`, `ODDS_TTL_MIN` (durée du cache des cotes, 10 par défaut).
-3. Redéploie, puis ouvre ⚙︎ Réglages → **Mettre à jour maintenant** pour charger la saison sans attendre la tâche planifiée.
+- **Défense par poste.** Pour chaque équipe : stats par minute accordées aux arrières, ailiers et pivots, divisées par la moyenne de la ligue, avec un rétrécissement vers 1 tant que l'échantillon est petit.
+- **Taux du joueur.** Stats par minute : 55 % sur les 10 derniers matchs et 45 % sur la saison, avec un a priori tiré de la saison passée qui s'efface au fil des matchs.
+- **Minutes.** Moyenne pondérée, puis ajustements : back-to-back, risque de large écart au score, coéquipiers absents au même poste.
+- **Distribution.** Loi binomiale négative (dispersion mesurée sur l'historique du joueur), qui donne P(Over) et P(Under) pour chaque ligne.
 
 ## Limites
 
@@ -41,6 +44,5 @@ Le modèle est dans `public/js/model.js`, la logique de value dans `public/js/va
 ## Développement
 
 ```bash
-npm install
 npm test   # tests du modèle + test de bout en bout avec données simulées
 ```

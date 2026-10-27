@@ -2,7 +2,7 @@
 // saisie dans les Réglages (stockée uniquement sur l'appareil).
 // Coût : ~10 crédits par match (1 par marché). Cache local de 10 min par match :
 // ouvrir plusieurs joueurs du même match ne coûte qu'un appel.
-import { normName, FR_BOOKS } from "./value.js";
+import { normName, SHOWN_BOOKS } from "./value.js";
 
 const BASE = "https://api.the-odds-api.com/v4/sports/basketball_nba";
 export const MARKET_MAP = {
@@ -11,7 +11,8 @@ export const MARKET_MAP = {
   player_points_rebounds: "pr", player_points_assists: "pa", player_rebounds_assists: "ra",
   player_blocks_steals: "sb",
 };
-const BOOKS = "winamax_fr,betclic_fr,unibet_fr,pinnacle,draftkings,fanduel,betmgm,williamhill_us,betrivers,bovada";
+// Winamax et Betclic sont les seuls affichés ; Pinnacle et Betfair servent de référence invisible (même coût).
+const BOOKS = "winamax_fr,betclic_fr,pinnacle,betfair_ex_eu";
 const TTL = 10 * 60e3;
 
 const ls = {
@@ -75,6 +76,12 @@ function pruneCache() {
   } catch { /* rien */ }
 }
 
+// Cotes déjà en cache (aucun crédit consommé), sinon null.
+export function cachedGameOdds(gameId) {
+  const c = ls.get(`astaria-odds-game-${gameId}`);
+  return c && Date.now() - c.fetchedAtMs < TTL ? { ...c, cached: true } : null;
+}
+
 export function quota() { return ls.get("astaria-odds-quota"); }
 
 export async function getGameOdds(game, apiKey, { force = false } = {}) {
@@ -97,7 +104,7 @@ export async function getGameOdds(game, apiKey, { force = false } = {}) {
     const books = [...new Set((res.body?.bookmakers || []).map((b) => b.key))];
     const out = {
       available: true, fetchedAt: new Date().toISOString(), fetchedAtMs: Date.now(), quota: res.quota,
-      books, frBooks: books.filter((b) => FR_BOOKS.has(b) && b !== "manual"), players: normalize(res.body),
+      books, frBooks: books.filter((b) => SHOWN_BOOKS.has(b)), players: normalize(res.body),
     };
     pruneCache();
     ls.set(ck, out);
@@ -106,4 +113,18 @@ export async function getGameOdds(game, apiKey, { force = false } = {}) {
     const msg = e.status === 401 ? "clé The Odds API invalide" : e.status === 429 ? "quota de crédits épuisé" : e.message === "Failed to fetch" ? "connexion impossible au fournisseur de cotes" : e.message;
     return { available: false, reason: "error", error: msg };
   }
+}
+
+// Vérifie la clé sans consommer de crédit (la liste des sports est gratuite).
+export async function testKey(apiKey) {
+  const url = new URL("https://api.the-odds-api.com/v4/sports");
+  url.searchParams.set("apiKey", apiKey);
+  const res = await fetch(url);
+  const remaining = res.headers.get("x-requests-remaining");
+  if (res.status === 401) return { ok: false, msg: "Clé invalide" };
+  if (!res.ok) return { ok: false, msg: `Erreur ${res.status}` };
+  const sports = await res.json();
+  const nba = sports.some((x) => x.key === "basketball_nba");
+  if (remaining) ls.set("astaria-odds-quota", { remaining });
+  return { ok: true, msg: `Clé valide ✓${remaining ? ` · ${remaining} crédits restants` : ""}${nba ? " · NBA disponible" : ""}` };
 }

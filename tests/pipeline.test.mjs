@@ -58,7 +58,22 @@ test("pipeline complet", async () => {
 
   const { evaluate } = await import("../js/value.js");
   const picks = evaluate("pts", proj.stats.pts, o.players["jayson tatum"].markets.pts);
-  assert.ok(picks.length === 4);
+  assert.equal(picks.length, 2, "seuls Winamax/Betclic sont conseillés (Pinnacle = référence)");
+  assert.ok(picks.every((p) => p.book === "winamax_fr"));
+
+  // Projections précalculées par la tâche GitHub + Top value
+  assert.ok(fs.existsSync(path.join(dir, "proj/9004.json")), "projections précalculées");
+  const picksMod = await import("../js/picks.js");
+  const projFile = await picksMod.getProjections("9004");
+  assert.ok(projFile.players["101"], "Tatum projeté");
+  assert.ok(!projFile.players["203"], "joueur Out exclu");
+  const sp = picksMod.statFromProj(projFile.players["101"], "pts");
+  assert.ok(Math.abs(sp.mean - proj.stats.pts.mean) < 0.05, `projection identique à l'app (${sp.mean} vs ${proj.stats.pts.mean})`);
+  const top = await picksMod.topValue("t", day.games, { oddsKey: "test", wModel: 0.6 });
+  assert.ok(top.picks.length > 0 && top.picks[0].player === "Jayson Tatum");
+  assert.equal(top.picks[0].book, "winamax_fr");
+  const mu = await picksMod.topMatchups("m", day.games);
+  assert.equal(mu.mode, "matchups");
 
   const j = await import("../js/journal.js");
   j.addBet({ eventId: "9002", season: 2027, playerId: "101", player: "Jayson Tatum", market: "pts", side: "over", line: 10.5, odds: 1.9, stake: 2 });

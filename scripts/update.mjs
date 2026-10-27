@@ -10,6 +10,8 @@ import { scoreboard, summary, teamRoster, parseInjuries, parsePickcenter, priorS
 import { seasonForDate, etDateKey, shiftDateKey } from "../js/factors.js";
 import { runUpdate } from "./lib/season.mjs";
 import { readJSON, writeJSON, exists, DATA_DIR } from "./lib/store.mjs";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 const t0 = Date.now();
 const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...a);
@@ -88,6 +90,52 @@ await pool(missing, 6, async (id) => {
   await writeJSON(`prior/${prev}/${id}`, { keys: K, rows: (rows || []).map((r) => K.map((k) => Math.round((r[k] || 0) * 10) / 10)) });
 });
 log("saisons précédentes récupérées", missing.length);
+
+// 5) Projections précalculées (même modèle que l'app) pour chaque joueur des matchs à venir.
+//    Le téléphone n'a plus qu'à récupérer les cotes et comparer : le Top value s'affiche vite.
+if (!globalThis.ASTARIA_DATA_BASE) {
+  globalThis.ASTARIA_DATA_BASE = "https://local.data/";
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (u, o) => {
+    const s = String(u);
+    if (!s.startsWith("https://local.data/")) return realFetch(u, o);
+    try { return new Response(await fs.readFile(path.join(DATA_DIR, s.slice(19).split("?")[0]), "utf8"), { status: 200 }); }
+    catch { return new Response("", { status: 404 }); }
+  };
+}
+const D = await import("../js/data.js");
+const { project, MARKETS, averages } = await import("../js/model.js");
+const r2 = (x) => Math.round(x * 100) / 100;
+let projCount = 0;
+for (const g of upcoming) {
+  try {
+    const gd = await D.getGameData(g.id);
+    const players = {};
+    for (const [teamId, roster] of Object.entries(gd.rosters || {})) {
+      for (const p of roster) {
+        const inj = (gd.injuries[teamId] || []).find((i) => i.id === p.id);
+        if (inj && /^out|suspen/i.test(inj.status)) continue;
+        const ctx = await D.buildContext(gd, p.id, teamId);
+        if (!ctx.logs.length && !ctx.prior) continue;
+        const proj = project(ctx);
+        if (!proj || proj.minutesUsed < 8) continue;
+        const base = ctx.logs.length >= 3 ? ctx.logs : [...(ctx.prior || []), ...ctx.logs];
+        const avg = averages(base.slice(-30));
+        players[p.id] = {
+          name: ctx.player.name, teamId, pos: ctx.player.pos, headshot: ctx.player.headshot,
+          status: inj?.status || null, min: r2(proj.minutesUsed), gp: ctx.logs.length,
+          m: Object.fromEntries(Object.keys(MARKETS).map((k) => [k, [r2(proj.stats[k].mean), r2(proj.stats[k].phi)]])),
+          avg: Object.fromEntries(Object.keys(MARKETS).map((k) => [k, r2(avg[k])])),
+          // 30 derniers matchs (saison en cours) : pts, reb, ast, 3pts, int, ctr
+          recent: ctx.logs.slice(-30).map((l) => [l.pts, l.reb, l.ast, l.fg3m, l.stl, l.blk]),
+        };
+        projCount++;
+      }
+    }
+    await writeJSON(`proj/${g.id}`, { gameId: g.id, updatedAt: new Date().toISOString(), players });
+  } catch (e) { log("projections", g.id, e.message); }
+}
+log("projections", projCount);
 
 const core = await readJSON(`s${season}/core`);
 await writeJSON("meta", {

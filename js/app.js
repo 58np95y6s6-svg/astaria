@@ -1,7 +1,8 @@
 import { MARKETS, project, probLine, averages, shotProfile, valueOf } from "./model.js";
-import { evaluate, tag, BOOK_LABEL, FR_BOOKS, normName } from "./value.js";
+import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName } from "./value.js";
 import { getDay, getGameData, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
-import { getGameOdds, quota as oddsQuota } from "./odds.js";
+import { getGameOdds, cachedGameOdds, quota as oddsQuota, testKey } from "./odds.js";
+import { topValue, topMatchups, cachedTop } from "./picks.js";
 import { addBet as journalAdd, deleteBet, settleAll, exportBets, importBets } from "./journal.js";
 
 // ---------- utilitaires ----------
@@ -14,7 +15,7 @@ const sgnPct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${(x * 100).toFi
 const GROUP_LABEL = { G: "arrières", F: "ailiers", C: "pivots" };
 
 const settings = (() => {
-  const def = { bankroll: 100, wModel: 0.6, oddsKey: "", frOnly: false };
+  const def = { bankroll: 100, wModel: 0.6, oddsKey: "" };
   try { return { ...def, ...JSON.parse(localStorage.getItem("astaria-settings") || "{}") }; } catch { return def; }
 })();
 function saveSettings() { try { localStorage.setItem("astaria-settings", JSON.stringify(settings)); } catch {} }
@@ -80,7 +81,7 @@ async function viewHome(token, day) {
     const label = k === today ? "Auj." : k === shiftKey(today, 1) ? "Demain" : k === shiftKey(today, -1) ? "Hier" : wd;
     return `<a class="day ${k === sel ? "on" : ""}" href="#/day/${k}"><small>${label}</small><b>${d.getUTCDate()}</b><small>${d.toLocaleDateString("fr-FR", { month: "short", timeZone: "UTC" })}</small></a>`;
   }).join("");
-  $app.innerHTML = `<h1>Matchs NBA</h1><div class="days">${strip}</div><p class="muted small">Date US (heure de New York). Horaires affichés à l'heure de Paris.</p><div id="games">${loader()}</div>`;
+  $app.innerHTML = `<div id="topAcc"></div><div class="days">${strip}</div><div class="section-title"><b>Matchs</b><span class="muted small">heure de Paris</span></div><div id="games">${loader()}</div>`;
   setTimeout(() => document.querySelector(".day.on")?.scrollIntoView({ inline: "center", block: "nearest" }), 0);
   try {
     const day = await getDay(sel);
@@ -90,7 +91,81 @@ async function viewHome(token, day) {
     const games = day.games || [];
     if (!games.length) { el.innerHTML = `<div class="card empty">Aucun match ce jour-là.</div>`; return; }
     el.innerHTML = games.map(gameCard).join("");
+    if (games.some((g) => g.state === "pre")) mountTop("topAcc", `day-${sel}`, games, sel === today ? "Top 5 value du jour" : "Top 5 value du " + keyToDate(sel).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", timeZone: "UTC" }));
   } catch (e) { if (!stale(token)) document.getElementById("games").innerHTML = errorBox(e); }
+}
+
+// ---------- Accordéon « Top 5 value » ----------
+function ago(t) {
+  const m = Math.round((Date.now() - t) / 60e3);
+  return m < 1 ? "à l'instant" : `il y a ${m} min`;
+}
+
+function topRow(p) {
+  const t = tag(p);
+  return `<a class="pick row" href="#/player/${p.playerId}/${p.gameId}/${p.teamId}">
+    ${img(p.headshot, "av")}
+    <div class="grow"><div class="main ell">${esc(p.player)}</div>
+    <div class="small muted ell">${esc(MARKETS[p.key].short)} ${p.side === "over" ? "Over" : "Under"} ${p.line} · ${esc(p.bookLabel)} · ${pct(p.pFinal)}</div></div>
+    <div class="center"><div class="odds num">${f2(p.odds)}</div><span class="chip ${t.cls}">${sgnPct(p.ev)}</span></div></a>`;
+}
+
+function matchupRow(r) {
+  return `<a class="pick row" href="#/player/${r.playerId}/${r.gameId}/${r.teamId}">
+    ${img(r.headshot, "av")}
+    <div class="grow"><div class="main ell">${esc(r.player)}</div>
+    <div class="small muted">${esc(MARKETS[r.key].short)} · proj. <b style="color:var(--text)">${f1(r.mean)}</b> vs moy. ${f1(r.avg)}</div></div>
+    <div class="center"><span class="chip good">${sgnPct(r.edge)}</span></div></a>`;
+}
+
+function topSummary(res) {
+  if (!res || res.mode !== "odds") return "Meilleurs matchups (gratuit) · scan des cotes à la demande";
+  const pos = res.picks.filter((p) => p.ev > 0);
+  return pos.length ? `${Math.min(5, pos.length)} paris · meilleur ${sgnPct(pos[0].ev)} · ${ago(res.at)}` : `Aucune value pour l'instant · ${ago(res.at)}`;
+}
+
+function mountTop(id, scope, games, title) {
+  const host = document.getElementById(id);
+  if (!host) return;
+  const pre = games.filter((g) => g.state === "pre").length;
+  const cached = cachedTop(scope);
+  const oddsRes = cached?.mode === "odds" ? cached : null;
+  host.innerHTML = `<details class="acc top-acc">
+    <summary><span class="acc-ico">🔥</span><div class="grow"><b>${esc(title)}</b><div class="small" data-sub>${esc(topSummary(oddsRes))}</div></div><span class="chev" aria-hidden="true"></span></summary>
+    <div class="acc-body" data-body></div></details>`;
+  const det = host.querySelector("details");
+  const sub = host.querySelector("[data-sub]");
+  const body = host.querySelector("[data-body]");
+  const scanLabel = `Scanner les cotes (≈${pre * 10} crédits)`;
+  const renderOdds = (res) => {
+    sub.textContent = topSummary(res);
+    const pos = res.picks.filter((p) => p.ev > 0);
+    body.innerHTML = (pos.length ? pos.slice(0, 5).map(topRow).join("") : `<div class="empty">Aucune cote Winamax/Betclic avec de la value pour l'instant.</div>`)
+      + (res.errors?.length ? `<div class="note">${res.errors.map(esc).join("<br>")}</div>` : "")
+      + `<div class="row between acc-foot"><button class="link" data-scan>↻ Rescanner</button>${res.quota ? `<span class="small muted">${res.quota} crédits restants</span>` : ""}<a class="link" href="#/value">Tout voir ›</a></div>`;
+    body.querySelector("[data-scan]").addEventListener("click", scan);
+  };
+  const renderMatchups = (res) => {
+    body.innerHTML = `<div class="small muted" style="margin:2px 0 4px">Projections au-dessus de la moyenne grâce au matchup</div>`
+      + (res.rows.length ? res.rows.slice(0, 5).map(matchupRow).join("") : `<div class="empty">Pas encore de projections pour ces matchs.</div>`)
+      + `<div class="acc-foot">${settings.oddsKey ? `<button class="btn primary scan-btn" data-scan>📡 ${scanLabel}</button>` : `<a class="btn scan-btn" href="#/settings">Ajouter ma clé de cotes pour scanner</a>`}</div>`;
+    body.querySelector("[data-scan]")?.addEventListener("click", scan);
+  };
+  async function scan() {
+    body.innerHTML = loader("Scan des cotes Winamax / Betclic…");
+    try {
+      const res = await topValue(scope, games, { oddsKey: settings.oddsKey, wModel: settings.wModel, onProgress: (i, n) => { sub.textContent = `Scan du match ${i}/${n}…`; } });
+      if (host.isConnected) renderOdds(res);
+    } catch (e) { body.innerHTML = errorBox(e); }
+  }
+  let loaded = false;
+  det.addEventListener("toggle", async () => {
+    if (!det.open || loaded) return;
+    loaded = true;
+    if (oddsRes) { renderOdds(oddsRes); return; }
+    body.innerHTML = loader("Analyse des matchups…");
+    try { renderMatchups(await topMatchups(`${scope}-mu`, games)); } catch (e) { body.innerHTML = errorBox(e); }
+  });
 }
 
 function gameCard(g) {
@@ -165,35 +240,31 @@ async function viewGame(token, id, teamSel) {
       <div class="mid"><div class="time">${g.state === "pre" ? parisTime(g.date) : `${g.away.score ?? ""} – ${g.home.score ?? ""}`}</div><div class="muted small">${parisDay(g.date)}</div></div>
       <div class="team right">${img(g.home.logo)}<div class="nm ell">${esc(g.home.short)}</div></div>
     </div>
+    ${g.state === "pre" ? `<div id="gameTop"></div>` : ""}
     <div class="seg">
       ${[g.away, g.home].map((x) => `<button class="${x.id === tid ? "on" : ""}" data-team="${x.id}">${img(x.logo)}${esc(x.abbr || x.short)}</button>`).join("")}
     </div>
     <div class="chips">${chips}</div>
     ${inj.length ? `<div class="note"><b>Infirmerie :</b> ${inj.map((i) => `${esc(i.name)} (${esc(i.status)})`).join(", ")}</div>` : ""}
     ${rosterHtml}
-    <a class="fab" href="#/value" data-scan="${g.id}">⚡ Value</a>
     <div class="row wrap"><span class="muted small">Données : ${data.data.gamesTotal} matchs analysés${data.data.updatedAt ? `, mis à jour ${new Date(data.data.updatedAt).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}` : ""}</span></div>`;
   $app.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => { location.hash = `#/game/${g.id}/${b.dataset.team}`; }));
-  $app.querySelector("[data-scan]")?.addEventListener("click", () => { valueState.only = g.id; });
+  mountTop("gameTop", `game-${g.id}`, [g], "Top 5 value du match");
 }
 
 // ---------- Joueur ----------
-const playerState = { minutes: null, market: "pts", manual: {} };
+const playerState = { minutes: null, market: "pts", manual: {}, open: new Set() };
 
 async function viewPlayer(token, pid, gid, tid) {
   $app.innerHTML = loader("Analyse du joueur…");
   playerState.minutes = null;
-  let data, oddsP;
+  let data;
   try {
-    const G = await getGame(gid);
-    oddsP = getGameOdds(G.game, settings.oddsKey); // les cotes ne sont demandées qu'à l'ouverture d'un joueur
-    data = await buildContext(G.gd, pid, tid);
+    data = await buildContext((await getGame(gid)).gd, pid, tid);
   } catch (e) { if (!stale(token)) $app.innerHTML = errorBox(e); return; }
   if (stale(token)) return;
-  const st = { data, odds: null };
-  renderPlayer(st);
-  st.odds = await oddsP;
-  if (stale(token)) return;
+  // Les cotes ne sont demandées que sur le bouton « Scanner » (sauf si déjà en cache : gratuit).
+  const st = { data, odds: cachedGameOdds(gid) || { idle: true } };
   renderPlayer(st);
 }
 
@@ -257,8 +328,8 @@ function renderPlayer(st) {
   // --- Minutes ---
   const m = proj.minutes;
   const adjHtml = m.adjustments.map((a) => `<div class="row between small"><span>${esc(a.label)}</span><b class="${a.delta >= 0 ? "up" : "down"}">${a.delta >= 0 ? "+" : ""}${f1(a.delta)} min</b></div>`).join("");
-  const minutesCard = `<div class="card">
-    <div class="row between"><h2 style="margin:0">Minutes projetées</h2><b class="odds num" id="minv">${f1(proj.minutesUsed)}</b></div>
+  const minutesCard = `
+    <div class="row between"><span class="muted small">Minutes projetées</span><b class="odds num" id="minv">${f1(proj.minutesUsed)}</b></div>
     <div class="small muted">Base ${f1(m.base)} (saison ${f1(m.season)}, 10 derniers ${f1(m.l10)}${m.prior ? `, saison passée ${f1(m.prior)}` : ""})</div>
     ${adjHtml}
     <input type="range" min="0" max="44" step="0.5" value="${f1(proj.minutesUsed)}" id="minr" aria-label="Ajuster les minutes">
@@ -272,8 +343,7 @@ function renderPlayer(st) {
       ${proj.context.rebBoost > 1.005 ? `<span class="chip good">Rebonds +${((proj.context.rebBoost - 1) * 100).toFixed(0)} % (absents)</span>` : ""}
       ${proj.context.wPrior > 0.05 ? `<span class="chip neutral">Saison passée pèse ${(proj.context.wPrior * 100).toFixed(0)} %</span>` : ""}
     </div>
-    ${d.injuries.missing?.length ? `<div class="note">Absents pris en compte : ${d.injuries.missing.map((x) => `${esc(x.name)} (${f1(x.mpg)} min)`).join(", ")}</div>` : ""}
-  </div>`;
+    ${d.injuries.missing?.length ? `<div class="note">Absents pris en compte : ${d.injuries.missing.map((x) => `${esc(x.name)} (${f1(x.mpg)} min)`).join(", ")}</div>` : ""}`;
 
   // --- Meilleurs paris (tous marchés) ---
   const allPicks = [];
@@ -291,16 +361,16 @@ function renderPlayer(st) {
     }
     return [...m.values()];
   };
-  const eligible = dedup(allPicks.filter((p) => !settings.frOnly || p.fr));
+  const eligible = dedup(allPicks);
   const best = eligible.filter((p) => p.ev > 0).sort((a, b) => b.ev - a.ev).slice(0, 5);
   const bestKeys = new Set(best.map((p) => `${p.key}|${p.side}|${p.line}`));
   const safest = eligible.filter((p) => p.ev >= 0 && !bestKeys.has(`${p.key}|${p.side}|${p.line}`)).sort((a, b) => b.pFinal - a.pFinal).slice(0, 3);
   const oddsInfo = oddsStatus(st.odds);
   const bestCard = `<div class="card">
-    <h2>💡 Paris conseillés</h2>
+    <h2>Meilleurs paris</h2>
     ${st.odds == null ? loader("Récupération des cotes…") : ""}
-    ${best.length ? `<h3>Meilleure value</h3>${best.map((p) => pickRow(p, d)).join("")}` : st.odds ? `<div class="muted">Aucune value détectée pour l'instant${allPicks.length ? "" : " (pas de cotes)"}. Saisis une cote Winamax/Betclic dans un marché ci-dessous.</div>` : ""}
-    ${safest.length ? `<h3>Les plus probables (EV ≥ 0)</h3>${safest.map((p) => pickRow(p, d)).join("")}` : ""}
+    ${best.length ? `${best.map((p) => pickRow(p, d)).join("")}` : st.odds && !st.odds.idle ? `<div class="muted">Aucune value détectée${allPicks.length ? "" : " (pas de cotes)"}. Tu peux saisir une cote Winamax/Betclic dans un marché ci-dessous.</div>` : ""}
+    ${safest.length ? `<details class="mini"><summary>Les plus probables (${safest.length})</summary>${safest.map((p) => pickRow(p, d)).join("")}</details>` : ""}
     ${oddsInfo}
   </div>`;
 
@@ -315,20 +385,20 @@ function renderPlayer(st) {
   const ladder = ladderLines.map((l) => {
     const p = probLine(sp.dist, l);
     const hr = sp.l10Values.filter((v) => v > l).length;
-    return `<tr${l === lineRef ? ` style="background:var(--bg2)"` : ""}><td>${l}</td><td>${pct(p.over)}</td><td>${f2(1 / p.over)}</td><td>${pct(p.under)}</td><td>${f2(1 / p.under)}</td><td>${hr}/${sp.l10Values.length}</td></tr>`;
+    return `<tr${l === lineRef ? ` style="background:var(--soft)"` : ""}><td>${l}</td><td>${pct(p.over)}</td><td>${f2(1 / p.over)}</td><td>${pct(p.under)}</td><td>${f2(1 / p.under)}</td><td>${hr}/${sp.l10Values.length}</td></tr>`;
   }).join("");
   const offersByLine = {};
   for (const o of offers) (offersByLine[o.line] ||= []).push(o);
   const offersHtml = offers.length ? `<div class="scroll"><table><thead><tr><th>Bookmaker</th><th>Ligne</th><th>Over</th><th>Under</th><th>Meilleur côté</th></tr></thead><tbody>
-    ${offers.sort((a, b) => (FR_BOOKS.has(b.book) - FR_BOOKS.has(a.book)) || a.line - b.line).map((o) => {
+    ${offers.filter((o) => SHOWN_BOOKS.has(o.book)).sort((a, b) => (FR_BOOKS.has(b.book) - FR_BOOKS.has(a.book)) || a.line - b.line).map((o) => {
       const ps = picksMk.filter((p) => p.book === o.book && p.line === o.line).sort((a, b) => b.ev - a.ev)[0];
       const t = ps ? tag(ps) : null;
-      return `<tr><td>${FR_BOOKS.has(o.book) ? "🇫🇷 " : ""}${esc(BOOK_LABEL[o.book] || o.book)}</td><td>${o.line}</td><td>${f2(o.over)}</td><td>${f2(o.under)}</td>
+      return `<tr><td>${esc(BOOK_LABEL[o.book] || o.book)}</td><td>${o.line}</td><td>${f2(o.over)}</td><td>${f2(o.under)}</td>
       <td>${ps ? `<span class="chip ${t.cls}">${ps.side === "over" ? "Over" : "Under"} ${sgnPct(ps.ev)}</span>` : "–"}</td></tr>`;
     }).join("")}</tbody></table></div>` : `<div class="muted small">Pas de cote reçue pour ce marché.</div>`;
 
   const tabs = Object.entries(MARKETS).map(([k, v]) => `<button data-mk="${k}" class="${k === mk ? "on" : ""}">${v.short}</button>`).join("");
-  const marketCard = `<div class="card">
+  const marketCard = `<div class="card" id="mkt">
     <div class="tabs">${tabs}</div>
     <div class="row between"><h2 style="margin:6px 0">${MARKETS[mk].label}</h2><div class="center"><div class="odds num">${f1(sp.mean)}</div><div class="muted small">projection</div></div></div>
     <div class="small muted">Médiane ${sp.median} · 50 % de chances entre ${sp.p25} et ${sp.p75} · saison ${f1(sp.season)} · 10 derniers ${f1(sp.l10)}</div>
@@ -337,9 +407,9 @@ function renderPlayer(st) {
     <h3>Probabilités par ligne (modèle seul)</h3>
     <div class="scroll"><table><thead><tr><th>Ligne</th><th>P(Over)</th><th>Cote juste</th><th>P(Under)</th><th>Cote juste</th><th>10 dern.</th></tr></thead><tbody>${ladder}</tbody></table></div>
     <div class="note">Une cote est « value » si elle est <b>supérieure à la cote juste</b>.</div>
-    <h3>Saisir une cote (Winamax, Betclic…)</h3>
+    <h3>Saisir une cote Winamax / Betclic</h3>
     <div class="form">
-      <div><label>Bookmaker</label><select id="mbook"><option value="winamax_fr">Winamax</option><option value="betclic_fr">Betclic</option><option value="unibet_fr">Unibet</option><option value="parionssport_fr">Parions Sport</option></select></div>
+      <div><label>Bookmaker</label><select id="mbook"><option value="winamax_fr">Winamax</option><option value="betclic_fr">Betclic</option></select></div>
       <div><label>Ligne</label><input type="number" step="0.5" id="mline" value="${lineRef}"></div>
       <div><label>Cote Over</label><input type="number" step="0.01" id="mover" placeholder="1.85"></div>
       <div><label>Cote Under</label><input type="number" step="0.01" id="munder" placeholder="1.85"></div>
@@ -350,24 +420,47 @@ function renderPlayer(st) {
   // --- Derniers matchs ---
   const recent = d.logs.slice(-10).reverse().map((l) => `<tr><td>${l.d.slice(6, 8)}/${l.d.slice(4, 6)}</td><td>${l.home ? "vs" : "@"} ${esc(teamAbbr(d, l.opp))}</td><td>${Math.round(l.min)}</td><td><b>${l.pts}</b></td><td>${l.reb}</td><td>${l.ast}</td><td>${l.fg3m}/${l.fg3a}</td><td>${l.stl}</td><td>${l.blk}</td><td>${l.pts + l.reb + l.ast}</td></tr>`).join("");
 
+  // --- Tuiles de projection (lecture rapide) ---
+  const TILE_KEYS = ["pts", "reb", "ast", "fg3m", "pra", "stl", "blk"];
+  const tiles = TILE_KEYS.map((k) => {
+    const sp2 = proj.stats[k];
+    const ref = sp2.season ?? (prior ? prior[k] : null);
+    const diff = ref ? sp2.mean / ref - 1 : null;
+    const cls = diff == null ? "" : diff > 0.04 ? "up" : diff < -0.04 ? "down" : "";
+    return `<button class="tile ${k === playerState.market ? "on" : ""}" data-tile="${k}">
+      <span class="tl">${MARKETS[k].short}</span><b class="num">${f1(sp2.mean)}</b>
+      <span class="tr ${cls}">${diff == null ? "&nbsp;" : `${diff >= 0 ? "▲" : "▼"} moy. ${f1(ref)}`}</span></button>`;
+  }).join("");
+
+  const acc = (id, title, html, sub = "") => `<details class="acc" data-acc="${id}"${playerState.open.has(id) ? " open" : ""}>
+    <summary><div class="grow"><b>${title}</b>${sub ? `<div class="small muted">${sub}</div>` : ""}</div><span class="chev" aria-hidden="true"></span></summary>
+    <div class="acc-body">${html}</div></details>`;
+
   $app.innerHTML = `${back}
     <div class="card phead">
       ${img(d.player.headshot)}
       <div class="grow"><div class="name">${esc(name)}${statusBadge(inj?.status)}</div>
-      <div class="muted small">${esc(d.player.pos || "")} · ${esc(d.teamName)} ${d.home ? "vs" : "@"} ${esc(d.oppName)} · ${parisDay(g.date)} ${parisTime(g.date)}</div>
-      ${inj ? `<div class="small" style="color:var(--warn)">${esc(inj.status)} ${esc(inj.detail || "")}</div>` : ""}
+      <div class="muted small">${esc(d.player.pos || "")} · ${esc(d.teamName)} ${d.home ? "vs" : "@"} ${esc(d.oppName)}</div>
+      <div class="muted small">${parisDay(g.date)} · ${parisTime(g.date)} · <b style="color:#fff">${f1(proj.minutesUsed)} min</b> projetées</div>
+      ${inj ? `<div class="small" style="color:#ffb4b6">${esc(inj.status)} ${esc(inj.detail || "")}</div>` : ""}
       </div>
     </div>
+    <div class="tiles">${tiles}</div>
     ${bestCard}
-    ${minutesCard}
-    <div class="card"><h2>Statistiques & projection</h2><div class="scroll"><table>
+    ${marketCard}
+    ${acc("minutes", "Minutes & contexte", minutesCard, [d.b2b && "back-to-back", d.injuries.missing?.length && `${d.injuries.missing.length} absent(s)`, `rythme ×${f2(proj.context.pace)}`].filter(Boolean).join(" · "))}
+    ${acc("matchup", `Matchup défensif`, `<div class="scroll">${matchup}</div>`, `${esc(d.oppName)} face aux ${grp}`)}
+    ${acc("stats", "Statistiques détaillées", `<div class="scroll"><table>
       <thead><tr><th></th><th>Saison passée</th><th>Saison (${d.logs.length} m.)</th><th>10 derniers</th><th>Projection</th></tr></thead>
       <tbody>${rows}${shoot}</tbody></table></div>
-      ${d.logs.length < 5 ? `<div class="note warn">Début de saison : peu de matchs, la projection s'appuie aussi sur la saison passée.</div>` : ""}
-    </div>
-    ${marketCard}
-    <div class="card"><h2>Matchup : ${esc(d.oppName)} face aux ${grp}</h2><div class="scroll">${matchup}</div></div>
-    <div class="card"><h2>10 derniers matchs</h2>${recent ? `<div class="scroll"><table><thead><tr><th>Date</th><th>Adv.</th><th>Min</th><th>Pts</th><th>Reb</th><th>PD</th><th>3pts</th><th>Int</th><th>Ctr</th><th>PRA</th></tr></thead><tbody>${recent}</tbody></table></div>` : `<div class="muted">Aucun match cette saison.</div>`}</div>`;
+      ${d.logs.length < 5 ? `<div class="note warn">Début de saison : peu de matchs, la projection s'appuie aussi sur la saison passée.</div>` : ""}`, "saison, 10 derniers, saison passée")}
+    ${acc("logs", "10 derniers matchs", recent ? `<div class="scroll"><table><thead><tr><th>Date</th><th>Adv.</th><th>Min</th><th>Pts</th><th>Reb</th><th>PD</th><th>3pts</th><th>Int</th><th>Ctr</th><th>PRA</th></tr></thead><tbody>${recent}</tbody></table></div>` : `<div class="muted">Aucun match cette saison.</div>`)}`;
+
+  $app.querySelectorAll("details[data-acc]").forEach((el) => el.addEventListener("toggle", () => { el.open ? playerState.open.add(el.dataset.acc) : playerState.open.delete(el.dataset.acc); }));
+  $app.querySelectorAll("[data-tile]").forEach((b) => b.addEventListener("click", () => {
+    playerState.market = b.dataset.tile; renderPlayer(st);
+    document.getElementById("mkt")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
 
   // --- événements ---
   const range = document.getElementById("minr");
@@ -387,11 +480,13 @@ function renderPlayer(st) {
     renderPlayer(st);
   });
   $app.querySelectorAll("[data-bet]").forEach((b) => b.addEventListener("click", () => addBet(JSON.parse(b.dataset.bet), d)));
-  $app.querySelector("[data-refresh-odds]")?.addEventListener("click", async (e) => {
-    e.target.disabled = true;
-    st.odds = await getGameOdds(g, settings.oddsKey, { force: true });
+  $app.querySelectorAll("[data-scan-odds]").forEach((b) => b.addEventListener("click", async () => {
+    const force = !st.odds?.idle;
+    st.odds = null;
     renderPlayer(st);
-  });
+    st.odds = await getGameOdds(g, settings.oddsKey, { force });
+    if (location.hash.includes(`/player/${d.player.id}/`)) renderPlayer(st);
+  }));
 }
 
 function teamAbbr(d, id) {
@@ -400,13 +495,20 @@ function teamAbbr(d, id) {
   return d.teamsAbbr?.[id] || "";
 }
 
+function scanButton(label = "Scanner les cotes Winamax / Betclic") {
+  return settings.oddsKey
+    ? `<button class="btn primary scan-btn" data-scan-odds>📡 ${label}</button><div class="small muted center" style="margin-top:6px">≈10 crédits pour tout le match · ${oddsQuota()?.remaining ? `${oddsQuota().remaining} restants` : "500/mois"}</div>`
+    : `<a class="btn scan-btn" href="#/settings">Ajouter ma clé de cotes pour scanner</a>`;
+}
+
 function oddsStatus(o) {
   if (!o) return "";
+  if (o.idle) return `<div class="muted small" style="margin-bottom:10px">Projections et stats ci-dessous (gratuites). Scanne les cotes seulement si le joueur t'intéresse.</div>${scanButton()}`;
   if (o.available) {
     const fr = o.frBooks?.length ? o.frBooks.map((b) => BOOK_LABEL[b] || b).join(", ") : null;
     return `<div class="note">Cotes ${o.cached ? "en cache" : "à jour"} (${new Date(o.fetchedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })})
-      · ${fr ? `🇫🇷 ${esc(fr)}` : "aucun book FR n'a publié de cotes joueurs sur ce match"}${o.quota?.remaining ? ` · ${o.quota.remaining} crédits restants` : ""}
-      <button class="btn sm" data-refresh-odds style="margin-left:6px">Rafraîchir</button></div>`;
+      · ${fr ? esc(fr) : "Winamax et Betclic n'ont pas encore publié de cotes joueurs sur ce match"}${o.quota?.remaining ? ` · ${o.quota.remaining} crédits restants` : ""}
+      <button class="btn sm" data-scan-odds style="margin-left:6px">↻ Rafraîchir</button></div>`;
   }
   const msg = { no_key: "Pas de clé The Odds API (⚙︎ Réglages) : saisis tes cotes Winamax/Betclic à la main ci-dessous.", event_not_found: "Match pas encore listé par le fournisseur de cotes.", finished: "Match terminé.", error: `Cotes indisponibles : ${o.error || ""}` }[o.reason] || "Cotes indisponibles.";
   return `<div class="note warn">${esc(msg)}</div>`;
@@ -420,7 +522,7 @@ function pickRow(p, d) {
   return `<div class="pick row">
     <div class="grow">
       <div class="main">${esc(p.label)} ${p.side === "over" ? "Over" : "Under"} ${p.line} <span class="chip ${t.cls}">${t.text} ${sgnPct(p.ev)}</span></div>
-      <div class="small muted">${p.fr ? "🇫🇷 " : ""}${esc(p.bookLabel)} · proba ${pct(p.pFinal)} (modèle ${pct(p.pModel)}${p.pMarket != null ? `, marché ${pct(p.pMarket)}` : ""}) · cote juste ${f2(p.fair)}${hit}</div>
+      <div class="small muted">${esc(p.bookLabel)} · proba ${pct(p.pFinal)} (modèle ${pct(p.pModel)}${p.pMarket != null ? `, marché ${pct(p.pMarket)}` : ""}) · cote juste ${f2(p.fair)}${hit}</div>
       ${stake > 0 ? `<div class="small muted">Mise conseillée : ${stake} (Kelly ¼, bankroll ${settings.bankroll})</div>` : ""}
     </div>
     <div class="center"><div class="odds num">${f2(p.odds)}</div><button class="btn sm" data-bet='${esc(JSON.stringify(bet))}'>+ Journal</button></div>
@@ -453,110 +555,55 @@ function spark(values, line, logs) {
   <div class="small muted">10 derniers matchs (du plus ancien au plus récent) vs ligne ${line}</div>`;
 }
 
-// ---------- Top value du jour ----------
-const valueState = { picks: [], scanned: new Set(), sort: "ev", only: null, quota: null, date: null, games: [] };
+// ---------- Top value du jour (liste complète) ----------
+const valueState = { sort: "ev" };
 
 async function viewValue(token) {
   const today = etKey();
-  if (valueState.date !== today) Object.assign(valueState, { picks: [], scanned: new Set(), date: today, games: [] });
-  $app.innerHTML = `<h1>Top value du jour</h1>
+  const scope = `day-${today}`;
+  $app.innerHTML = `<div class="section-title"><b>Value du jour</b><span class="muted small" id="vsub"></span></div>
     <div class="card">
-      <div class="small muted">Chaque match scanné consomme environ 10 crédits The Odds API (1 appel, puis cache 10 min). Les joueurs sont projetés avec le même modèle que la fiche joueur.</div>
-      <div class="row wrap" style="margin-top:10px">
-        <button class="btn primary" id="scanAll">Scanner les matchs à venir</button>
-        <label class="row" style="gap:6px"><input type="checkbox" id="frOnly" ${settings.frOnly ? "checked" : ""}> Books FR uniquement</label>
+      <div class="row wrap between">
+        <span class="small muted">Winamax & Betclic</span>
+        <button class="btn primary sm" id="scanAll">${settings.oddsKey ? "📡 Scanner les cotes" : "Ajouter ma clé"}</button>
       </div>
-      <div id="scanStatus" class="small muted" style="margin-top:8px"></div>
+      <div class="small muted" style="margin-top:6px">≈10 crédits par match, puis 10 min de cache.</div>
     </div>
-    <div class="tabs"><button data-sort="ev" class="${valueState.sort === "ev" ? "on" : ""}">Meilleure value</button><button data-sort="p" class="${valueState.sort === "p" ? "on" : ""}">Plus probables</button><button data-sort="odds" class="${valueState.sort === "odds" ? "on" : ""}">Meilleure cote (EV>0)</button></div>
-    <div id="picks" class="card"></div>`;
-  document.getElementById("frOnly").addEventListener("change", (e) => { settings.frOnly = e.target.checked; saveSettings(); renderPicks(); });
+    <div class="tabs"><button data-sort="ev" class="${valueState.sort === "ev" ? "on" : ""}">Meilleure value</button><button data-sort="p" class="${valueState.sort === "p" ? "on" : ""}">Plus probables</button><button data-sort="odds" class="${valueState.sort === "odds" ? "on" : ""}">Meilleure cote</button></div>
+    <div id="picks" class="card">${loader()}</div>`;
+  const show = (res) => {
+    const el = document.getElementById("picks");
+    if (!el) return;
+    document.getElementById("vsub").textContent = res ? ago(res.at) : "";
+    if (!res || res.mode !== "odds") { el.innerHTML = `<div class="empty">${settings.oddsKey ? "Touche « Scanner les cotes » pour comparer Winamax et Betclic à nos projections." : "Ajoute ta clé The Odds API dans ⚙︎ Réglages pour comparer les cotes."}</div>`; return; }
+    let list = res.picks.filter((p) => p.ev >= 0);
+    if (valueState.sort === "ev") list = list.filter((p) => p.ev > 0).sort((a, b) => b.ev - a.ev);
+    if (valueState.sort === "p") list.sort((a, b) => b.pFinal - a.pFinal);
+    if (valueState.sort === "odds") list = list.filter((p) => p.ev > 0).sort((a, b) => b.odds - a.odds);
+    el.innerHTML = (list.length ? list.slice(0, 40).map(topRow).join("") : `<div class="empty">Aucun pari ne passe les filtres.</div>`)
+      + (res.errors?.length ? `<div class="note">${res.errors.map(esc).join("<br>")}</div>` : "");
+  };
   $app.querySelectorAll("[data-sort]").forEach((b) => b.addEventListener("click", () => { valueState.sort = b.dataset.sort; viewValue(token); }));
-  document.getElementById("scanAll").addEventListener("click", () => scan(token));
-  renderPicks();
-  if (valueState.only) { const id = valueState.only; valueState.only = null; scan(token, [id]); }
-}
-
-async function scan(token, ids) {
-  const status = document.getElementById("scanStatus");
-  const btn = document.getElementById("scanAll");
-  btn.disabled = true;
-  try {
-    if (!ids) {
-      status.textContent = "Liste des matchs…";
-      const games = (await getDay(etKey()))?.games || [];
-      ids = games.filter((g) => g.state === "pre").map((g) => g.id);
-      if (!ids.length) { status.textContent = "Aucun match à venir aujourd'hui."; return; }
-    }
-    for (const [i, id] of ids.entries()) {
-      if (stale(token)) return;
-      status.textContent = `Scan ${i + 1}/${ids.length}…`;
-      const r = await scanGame(id).catch((e) => ({ error: e.message, picks: [] }));
-      if (r.error) status.textContent = r.error;
-      valueState.picks = valueState.picks.filter((p) => p.gameId !== id);
-      const matchup = r.game ? `${r.game.away.abbr} @ ${r.game.home.abbr}` : "";
-      for (const p of r.picks || []) valueState.picks.push({ ...p, gameId: id, matchup, season: r.game?.season, gameDate: r.game?.dateKey });
-      if (r.odds?.quota?.remaining) valueState.quota = r.odds.quota.remaining;
-      if (r.odds && !r.odds.available) status.textContent = `Match ${matchup} : ${r.odds.reason === "no_key" ? "clé API absente" : r.odds.error || r.odds.reason}`;
-      valueState.scanned.add(id);
-      renderPicks();
-    }
-    status.textContent = `${valueState.scanned.size} match(s) scanné(s)${valueState.quota ? ` · ${valueState.quota} crédits restants` : ""}.`;
-  } catch (e) { status.textContent = e.message; } finally { btn.disabled = false; }
-}
-
-// Scan d'un match : cotes de tous les joueurs → projection → paris classés par value.
-async function scanGame(id) {
-  const G = await getGame(id);
-  const gd = G.gd, g = G.game;
-  const odds = await getGameOdds(g, settings.oddsKey);
-  if (!odds.available) return { game: g, picks: [], odds };
-  const byName = new Map();
-  for (const [tid, r] of Object.entries(gd.rosters || {})) for (const p of r) byName.set(normName(p.name), { id: p.id, tid });
-  for (const [pid, p] of Object.entries(gd.core.players)) {
-    if ((p.teamId === g.home.id || p.teamId === g.away.id) && !byName.has(normName(p.name))) byName.set(normName(p.name), { id: pid, tid: p.teamId });
-  }
-  const picks = [];
-  await Promise.all(Object.entries(odds.players).map(async ([n, op]) => {
-    const who = byName.get(n);
-    if (!who) return;
-    const ctx = await buildContext(gd, who.id, who.tid);
-    const inj = ctx.playerInjury;
-    if (inj && /^out/i.test(inj.status)) return;
-    const proj = project(ctx);
-    if (!proj) return;
-    for (const [mk, offers] of Object.entries(op.markets)) {
-      if (!proj.stats[mk]) continue;
-      for (const b of evaluate(mk, proj.stats[mk], offers, { wModel: settings.wModel }).slice(0, 2)) {
-        picks.push({ ...b, playerId: who.id, player: ctx.player.name, teamId: ctx.teamId, status: inj?.status || null });
-      }
-    }
-  }));
-  return { game: g, picks: picks.sort((a, b) => b.ev - a.ev), odds };
-}
-
-function renderPicks() {
-  const el = document.getElementById("picks");
-  if (!el) return;
-  let list = valueState.picks.filter((p) => (!settings.frOnly || p.fr) && !(p.status && /^out/i.test(p.status)));
-  if (valueState.sort === "ev") list = list.filter((p) => p.ev > 0).sort((a, b) => b.ev - a.ev);
-  if (valueState.sort === "p") list = list.filter((p) => p.ev >= 0).sort((a, b) => b.pFinal - a.pFinal);
-  if (valueState.sort === "odds") list = list.filter((p) => p.ev > 0).sort((a, b) => b.odds - a.odds);
-  if (!list.length) { el.innerHTML = `<div class="empty">${valueState.scanned.size ? "Aucun pari ne passe les filtres." : "Lance un scan pour voir les meilleurs paris du jour."}</div>`; return; }
-  el.innerHTML = list.slice(0, 40).map((p) => {
-    const t = tag(p);
-    return `<a class="pick row" href="#/player/${p.playerId}/${p.gameId}/${p.teamId}">
-      <div class="grow"><div class="main">${esc(p.player)} — ${esc(p.label)} ${p.side === "over" ? "Over" : "Under"} ${p.line}</div>
-      <div class="small muted">${esc(p.matchup)} · ${p.fr ? "🇫🇷 " : ""}${esc(p.bookLabel)} · proba ${pct(p.pFinal)} · cote juste ${f2(p.fair)} · proj. ${f1(p.mean)}${p.status ? ` · ⚠️ ${esc(p.status)}` : ""}</div></div>
-      <div class="center"><div class="odds num">${f2(p.odds)}</div><span class="chip ${t.cls}">${sgnPct(p.ev)}</span></div></a>`;
-  }).join("");
+  const run = async () => {
+    if (!settings.oddsKey) { location.hash = "#/settings"; return; }
+    const btn = document.getElementById("scanAll");
+    btn.disabled = true;
+    try {
+      const games = (await getDay(today))?.games || [];
+      const res = await topValue(scope, games, { oddsKey: settings.oddsKey, wModel: settings.wModel, onProgress: (i, n) => { document.getElementById("vsub").textContent = `match ${i}/${n}…`; } });
+      if (!stale(token)) show(res);
+    } catch (e) { document.getElementById("picks").innerHTML = errorBox(e); } finally { btn.disabled = false; }
+  };
+  document.getElementById("scanAll").addEventListener("click", run);
+  const c = cachedTop(scope);
+  show(c && c.mode === "odds" ? c : null); // jamais de scan automatique
 }
 
 // ---------- Journal ----------
 async function viewJournal(token) {
-  $app.innerHTML = `<h1>Journal des paris</h1>${loader()}`;
+  $app.innerHTML = `<div class="section-title"><b>Journal des paris</b></div>${loader()}`;
   let bets;
-  try { bets = await settleAll(); } catch (e) { if (!stale(token)) $app.innerHTML = `<h1>Journal des paris</h1>${errorBox(e)}`; return; }
+  try { bets = await settleAll(); } catch (e) { if (!stale(token)) $app.innerHTML = `<div class="section-title"><b>Journal des paris</b></div>${errorBox(e)}`; return; }
   if (stale(token)) return;
   const settled = bets.filter((b) => ["won", "lost", "push"].includes(b.status));
   const staked = settled.reduce((s, b) => s + b.stake, 0);
@@ -572,7 +619,7 @@ async function viewJournal(token) {
   }).filter((x) => x.n);
   const label = { pending: "En cours", won: "Gagné", lost: "Perdu", push: "Remboursé", void: "Annulé (n'a pas joué)" };
   const cls = { won: "good", lost: "bad", push: "neutral", void: "neutral", pending: "" };
-  $app.innerHTML = `<h1>Journal des paris</h1>
+  $app.innerHTML = `<div class="section-title"><b>Journal des paris</b></div>
     <div class="kpis">
       <div class="kpi"><b class="${profit >= 0 ? "up" : "down"}">${profit >= 0 ? "+" : ""}${f2(profit)}</b><span>Profit (unités)</span></div>
       <div class="kpi"><b>${staked ? sgnPct(profit / staked) : "–"}</b><span>ROI</span></div>
@@ -601,20 +648,30 @@ async function viewJournal(token) {
 
 // ---------- Réglages ----------
 async function viewSettings(token) {
-  $app.innerHTML = `<h1>Réglages</h1>
+  $app.innerHTML = `<div class="section-title"><b>Réglages</b></div>
     <div class="card form">
       <div><label>Bankroll (unités)</label><input type="number" id="bk" value="${settings.bankroll}" min="1"></div>
       <div><label>Poids du modèle vs marché : <b id="wmv">${Math.round(settings.wModel * 100)} %</b></label><input type="range" id="wm" min="0.2" max="1" step="0.05" value="${settings.wModel}"></div>
       <div><label>Clé The Odds API</label><input type="password" id="ok" value="${esc(settings.oddsKey)}" autocomplete="off" placeholder="colle ta clé ici"></div>
     </div>
+    <div class="row wrap" style="margin-top:-2px"><button class="btn sm" id="testk">Tester la clé (gratuit)</button><span class="small" id="testkr"></span></div>
     <div class="note">Clé gratuite sur <a href="https://the-odds-api.com/#get-access" target="_blank" rel="noopener" style="text-decoration:underline">the-odds-api.com</a> (500 crédits/mois, ≈10 par match ouvert). Elle reste sur cet appareil. Sans clé, tu peux saisir tes cotes à la main.</div>
-    <div class="note">Le poids du modèle règle la confiance accordée à nos projections face au consensus des bookmakers (Pinnacle compte triple). 60 % est un bon départ ; ajuste selon la fiabilité mesurée dans le Journal.</div>
+    <div class="note">Le poids du modèle règle la confiance accordée à nos projections face au consensus des bookmakers (Pinnacle et Betfair servent de référence, sans être affichés). 60 % est un bon départ ; ajuste selon la fiabilité mesurée dans le Journal.</div>
     <div class="card" id="dstatus">${loader("État des données…")}</div>`;
   document.getElementById("bk").addEventListener("change", (e) => { settings.bankroll = Math.max(1, +e.target.value || 100); saveSettings(); toast("Enregistré"); });
   const wm = document.getElementById("wm");
   wm.addEventListener("input", () => { document.getElementById("wmv").textContent = `${Math.round(wm.value * 100)} %`; });
   wm.addEventListener("change", () => { settings.wModel = +wm.value; saveSettings(); toast("Enregistré"); });
   document.getElementById("ok").addEventListener("change", (e) => { settings.oddsKey = e.target.value.trim(); saveSettings(); toast("Clé enregistrée"); });
+  document.getElementById("testk").addEventListener("click", async (e) => {
+    const k = document.getElementById("ok").value.trim();
+    if (k !== settings.oddsKey) { settings.oddsKey = k; saveSettings(); }
+    const out = document.getElementById("testkr");
+    if (!k) { out.textContent = "Colle d'abord ta clé."; return; }
+    e.target.disabled = true; out.textContent = "Vérification…";
+    try { const r = await testKey(k); out.textContent = r.msg; out.className = `small ${r.ok ? "up" : "down"}`; }
+    catch { out.textContent = "Connexion impossible"; } finally { e.target.disabled = false; }
+  });
   renderStatus(token);
 }
 

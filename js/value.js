@@ -15,10 +15,12 @@ export const BOOK_LABEL = {
   winamax_fr: "Winamax", betclic_fr: "Betclic", betclic: "Betclic", unibet_fr: "Unibet",
   parionssport_fr: "Parions Sport", pmu_fr: "PMU", zebet_fr: "ZEbet",
   pinnacle: "Pinnacle", draftkings: "DraftKings", fanduel: "FanDuel", betmgm: "BetMGM",
-  williamhill_us: "Caesars", betrivers: "BetRivers", bovada: "Bovada", manual: "Saisie",
+  williamhill_us: "Caesars", betrivers: "BetRivers", bovada: "Bovada", betfair_ex_eu: "Betfair", manual: "Saisie",
 };
 export const FR_BOOKS = new Set(["winamax_fr", "betclic_fr", "betclic", "unibet_fr", "parionssport_fr", "pmu_fr", "zebet_fr", "manual"]);
-const SHARP_WEIGHT = { pinnacle: 3, draftkings: 1.5, fanduel: 1.5 };
+// Seuls bookmakers affichés et conseillés.
+export const SHOWN_BOOKS = new Set(["winamax_fr", "betclic_fr", "manual"]);
+const SHARP_WEIGHT = { pinnacle: 3, betfair_ex_eu: 2, draftkings: 1.5, fanduel: 1.5 };
 
 // Consensus de marché sans marge, pondéré (les books "sharp" pèsent plus).
 export function marketConsensus(offers, line) {
@@ -41,6 +43,7 @@ export function marketConsensus(offers, line) {
 export function evaluate(key, statProj, offers, { wModel = 0.6 } = {}) {
   const picks = [];
   for (const o of offers) {
+    if (!SHOWN_BOOKS.has(o.book)) continue; // les autres books ne servent qu'au consensus
     const p = probLine(statProj.dist, o.line);
     const cons = marketConsensus(offers, o.line);
     const hrL10Over = hitRate(statProj.l10Values, o.line, "over");

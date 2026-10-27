@@ -7,6 +7,7 @@ import { SHOWN_BOOKS, BOOK_LABEL } from "./value.js";
 
 export const TEAM_MARKETS = {
   ml: "Vainqueur",
+  lead: "Gagne ou mène de X pts",
   spread: "Handicap",
   total: "Total du match",
   teamtotal: "Total d'une équipe",
@@ -74,6 +75,12 @@ export function teamProb(proj, game, bet) {
   const ptsT = isHome ? proj.ptsH : proj.ptsA;
   switch (bet.market) {
     case "ml": return normCdf(marginT / SD.margin);
+    case "lead": {
+      // Victoire OU avance de X points à un moment du match. Mouvement brownien avec dérive :
+      // P(perdre après avoir mené de X) = e^(2μX/σ²) · Φ((−2X − μ) / σ).
+      const X = Math.abs(Number(bet.line)), s = SD.margin;
+      return Math.min(1, normCdf(marginT / s) + Math.exp((2 * marginT * X) / (s * s)) * normCdf((-2 * X - marginT) / s));
+    }
     case "spread": return normCdf((marginT + Number(bet.line)) / SD.margin);
     case "total": { const p = normCdf((proj.total - Number(bet.line)) / SD.total); return bet.side === "under" ? 1 - p : p; }
     case "teamtotal": { const p = normCdf((ptsT - Number(bet.line)) / SD.team); return bet.side === "under" ? 1 - p : p; }
@@ -87,6 +94,7 @@ export function teamLabel(bet, game) {
   const ln = Number(bet.line);
   switch (bet.market) {
     case "ml": return `${t.abbr} vainqueur`;
+    case "lead": return `${t.abbr} gagne ou mène de ${Math.abs(ln)} pts`;
     case "spread": {
       const x = Math.abs(ln);
       return ln > 0 ? `${t.abbr} gagne ou perd de moins de ${x} (+${x})` : ln < 0 ? `${t.abbr} gagne de plus de ${x} (−${x})` : `${t.abbr} handicap 0`;
@@ -103,6 +111,7 @@ export function gradeTeam(bet, scoreT, scoreO) {
   let diff;
   switch (bet.market) {
     case "ml": diff = scoreT - scoreO; break;
+    case "lead": if (scoreT > scoreO) return "won"; return "check"; // a-t-il mené de X ? à vérifier à la main
     case "spread": diff = scoreT + ln - scoreO; break;
     case "total": diff = (scoreT + scoreO - ln) * (bet.side === "under" ? -1 : 1); break;
     case "teamtotal": diff = (scoreT - ln) * (bet.side === "under" ? -1 : 1); break;

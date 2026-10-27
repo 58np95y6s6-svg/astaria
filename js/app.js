@@ -325,6 +325,7 @@ function mountTeamBets(data) {
             <div><label>Bookmaker</label><select id="tbook"><option value="winamax_fr">Winamax</option><option value="betclic_fr">Betclic</option></select></div>
             <div><label>Mise (€)</label><input type="number" inputmode="decimal" step="0.5" id="tstake" placeholder="conseillée"></div>
           </div>
+          <div id="thint" class="small muted" style="margin-top:6px"></div>
           <div id="tres" class="small" style="margin-top:8px"></div>
           <button class="btn primary scan-btn" id="tadd" style="margin-top:10px">+ Ajouter au journal</button>
         </div>
@@ -352,7 +353,8 @@ function mountTeamBets(data) {
       host.querySelector('[data-tf="side"]').hidden = !(mk === "total" || mk === "teamtotal");
       host.querySelector('[data-tf="line"]').hidden = mk === "ml";
       host.querySelector('[data-tf="spr"]').hidden = mk !== "spread";
-      $("tlinel").textContent = mk === "spread" ? "X (écart en points)" : "Ligne";
+      $("tlinel").textContent = mk === "spread" ? "X (écart en points)" : mk === "lead" ? "X (points d'avance)" : "Ligne";
+      $("thint").textContent = mk === "spread" ? "Betclic « perd de 10 ou − » → X = 10,5 · « gagne de 11 ou + » → X = 10,5" : mk === "lead" ? "Betclic « possède 18 points d'avance ou gagne » → X = 18" : "";
     };
     const current = () => {
       const mk = $("tmk").value;
@@ -1012,6 +1014,7 @@ function pendingCard(b) {
       <div class="grow"><div class="jbet-name ell">${esc(b.player)}</div><div class="small muted ell">${meta}</div></div>
       <div class="jodds num">${f2(b.odds)}</div>
     </div>
+    ${b.check ? `<div class="note warn" style="margin:8px 0">Score final ${esc(b.resultText || "")} : défaite. ${esc(b.player)} a-t-il mené de ${Math.abs(b.line)} pts ? Règle-le à la main.</div>` : ""}
     <div class="jbet-pick">${betTitle(b)}${b.pFinal != null ? ` <span class="chip">proba ${pct(b.pFinal)}</span>` : ""}</div>
     <div class="jstats"><div><span>Mise</span><b class="num">${eur(b.stake)}</b></div><div><span>Gain potentiel</span><b class="num up">+${eur(b.stake * (b.odds - 1))}</b></div><div><span>Retour</span><b class="num">${eur(b.stake * b.odds)}</b></div></div>
     <div class="jact">

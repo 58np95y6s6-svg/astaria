@@ -55,7 +55,7 @@ export function updateBet(id, patch) {
   if (patch.side === "over" || patch.side === "under") b.side = patch.side;
   if (patch.book) b.book = patch.book;
   if (b.kind === "team") {
-    if (b.scoreT != null && !b.manual) b.status = gradeTeam(b, b.scoreT, b.scoreO);
+    if (b.scoreT != null && !b.manual) { const st = gradeTeam(b, b.scoreT, b.scoreO); if (st !== "check") b.status = st; }
     save(bets); return;
   }
   // Si le pari était réglé automatiquement, on recalcule son statut avec la nouvelle ligne.
@@ -104,7 +104,9 @@ async function settleTeam(b) {
   if (!sT || !sO) return false;
   b.scoreT = sT; b.scoreO = sO;
   b.resultText = `${sT}-${sO}`;
-  b.status = gradeTeam(b, sT, sO);
+  const st = gradeTeam(b, sT, sO);
+  if (st === "check") { b.check = true; return true; } // défaite : l'avance de X points se vérifie à la main
+  b.status = st;
   b.settledAt = new Date().toISOString();
   b.auto = true;
   return true;

@@ -81,4 +81,10 @@ test("pipeline complet", async () => {
   const bets = await j.settleAll();
   assert.equal(bets.find((b) => b.playerId === "101").status, "won");
   assert.equal(bets.find((b) => b.playerId === "999").status, "void");
+  // Pari libre : retrouvé par le nom du joueur et la date
+  j.addBet({ eventId: "manual", season: 0, gameDate: "20261024", playerId: "manual", player: "jayson tatum", market: "pts", side: "under", line: 99.5, odds: 1.8 });
+  const b2 = await j.settleAll();
+  const free = b2.find((b) => b.line === 99.5);
+  assert.equal(free.status, "won");
+  assert.equal(free.eventId, "9002");
 });

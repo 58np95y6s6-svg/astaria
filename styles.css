@@ -213,3 +213,94 @@ img.av, .ph.av { width: 42px; height: 42px; border-radius: 14px; object-fit: cov
 .settle + .pick, .pick:has(+ .settle) { border-bottom: 0; }
 .editbox { background: var(--soft); border-radius: 14px; padding: 12px; margin: 0 0 12px; }
 .editbox input, .editbox select { background: var(--card); }
+
+/* ==========================================================================
+   Journal des paris (KPI, courbe de profit, onglets En cours / Terminés)
+   ========================================================================== */
+.jkpis { gap: 8px; }
+.jkpi { padding: 11px 13px 10px; min-width: 0; display: flex; flex-direction: column; }
+.jkpi b { font-size: 20px; letter-spacing: -.02em; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jkpi span { font-weight: 700; color: var(--text); font-size: 12.5px; margin-top: 1px; }
+.jkpi small { font-size: 11px; color: var(--muted); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jkpi:first-child span { color: #fff; }
+.jkpi:first-child small { color: var(--navy-muted); }
+.jkpi:first-child b.up { color: #5fe0ac; }
+.jkpi:first-child b.down { color: #ff8a8e; }
+
+/* Courbe */
+.jcurve { padding-bottom: 12px; }
+.jchart { display: block; width: 100%; height: auto; margin: 10px 0 2px; overflow: visible; }
+.jchart text { font-size: 10.5px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.jchart .jgrid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 4; }
+.jchart .jzero { stroke: var(--muted); stroke-width: 1; opacity: .55; }
+.jchart .jline { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.jchart .jline.up { stroke: var(--good); } .jchart .jline.dn { stroke: var(--accent); }
+.jchart .jarea.up { fill: var(--good); opacity: .12; } .jchart .jarea.dn { fill: var(--accent); opacity: .12; }
+.jchart .jdot { stroke: var(--card); stroke-width: 2.5; }
+.jchart .jdot.up { fill: var(--good); } .jchart .jdot.dn { fill: var(--accent); }
+.jchart-empty { text-align: center; padding: 8px 0 6px; }
+.jchart-ghost { height: 84px; margin: 6px 0 10px; border-radius: 14px; background:
+  linear-gradient(to top right, transparent calc(50% - 1.5px), var(--line) calc(50% - 1.5px), var(--line) calc(50% + 1.5px), transparent calc(50% + 1.5px)), var(--soft); }
+.jsplit-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.jmini { display: inline-flex; background: var(--soft); border-radius: 12px; padding: 3px; gap: 2px; }
+.jmini button { border: 0; background: transparent; border-radius: 9px; padding: 0 12px; min-height: 34px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.jmini button.on { background: var(--card); color: var(--text); box-shadow: 0 2px 6px rgba(40, 48, 100, .1); }
+.jbar { display: grid; grid-template-columns: minmax(0, 120px) 1fr auto; align-items: center; gap: 10px; padding: 6px 0; }
+.jbar-l { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.jbar-l b { font-size: 13px; }
+.jbar-l span { font-size: 11px; color: var(--muted); }
+.jbar-t { height: 8px; background: var(--soft); border-radius: 99px; overflow: hidden; }
+.jbar-t i { display: block; height: 100%; border-radius: 99px; }
+.jbar-t i.up { background: var(--good); } .jbar-t i.dn { background: var(--accent); }
+.jbar-v { font-size: 13.5px; min-width: 64px; text-align: right; }
+
+/* Onglets segmentés */
+.jtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--navy); border-radius: 16px; padding: 5px; margin: 16px 0 4px; }
+.jtabs button { border: 0; background: transparent; min-height: 42px; border-radius: 12px; font-weight: 700; font-size: 14.5px; color: var(--navy-muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 7px; }
+.jtabs button span { min-width: 22px; padding: 1px 7px; border-radius: 99px; background: var(--navy2); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
+.jtabs button.on { background: var(--card); color: var(--text); }
+.jtabs button.on span { background: var(--accent); }
+
+/* Carte d'un pari en cours */
+.jav { width: 42px; height: 42px; border-radius: 14px; flex: none; display: grid; place-items: center; background: var(--soft); color: var(--navy2); font-weight: 800; font-size: 14px; letter-spacing: .02em; }
+.jbet { padding: 14px 14px 12px; }
+.jbet-head { gap: 12px; }
+.jbet-name { font-weight: 800; font-size: 15.5px; letter-spacing: -.01em; }
+.jodds { font-weight: 800; font-size: 18px; background: var(--navy); color: #fff; border-radius: 12px; padding: 6px 10px; }
+.jbet-pick { margin: 10px 0 0; font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.jstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0 0; background: var(--soft); border-radius: 14px; padding: 8px 10px; }
+.jstats div { display: flex; flex-direction: column; min-width: 0; }
+.jstats span { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.jstats b { font-size: 14.5px; }
+.jact { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
+.jbtn { flex: 1 1 auto; min-height: 40px; border: 0; border-radius: 12px; background: var(--soft); font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 0 8px; white-space: nowrap; color: var(--text); }
+.jbtn.won { background: #e1f6ee; color: var(--good); }
+.jbtn.lost { background: var(--accent-soft); color: var(--bad); }
+.jbtn.ico { flex: 0 0 40px; width: 40px; padding: 0; color: var(--muted); font-size: 15px; }
+.jbet .editbox, .jrow-body .editbox { margin: 10px 0 0; }
+
+/* Pari libre */
+.jfree .jplus { width: 42px; height: 42px; border-radius: 14px; flex: none; display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 24px; font-weight: 700; box-shadow: var(--shadow-accent); }
+
+/* Paris terminés, groupés par jour */
+.jday { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 4px 0; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.jday span::first-letter { text-transform: uppercase; }
+.jday b { font-size: 13px; }
+.jlist { padding: 4px 14px; margin-top: 6px; }
+.jrow + .jrow { border-top: 1px solid var(--line); }
+.jrow > summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 11px 0; min-height: 56px; }
+.jrow > summary::-webkit-details-marker { display: none; }
+.jrow .jav.st { width: 36px; height: 36px; border-radius: 12px; font-size: 16px; }
+.jrow.won .jav.st { background: #e1f6ee; color: var(--good); }
+.jrow.lost .jav.st { background: var(--accent-soft); color: var(--bad); }
+.jrow.push .jav.st, .jrow.void .jav.st { background: #e8ebff; color: var(--info); }
+.jrow .jbet-name { font-size: 14.5px; }
+.jrow-r { text-align: right; display: flex; flex-direction: column; flex: none; line-height: 1.3; }
+.jrow-r > b { font-size: 15.5px; }
+.jrow-r > b.muted { font-size: 13px; color: var(--info); }
+.jrow[open] > summary { padding-bottom: 6px; }
+.jrow-body { padding: 0 0 12px 48px; }
+
+.jsave { padding: 12px; }
+.jsave .btn { min-height: 42px; }

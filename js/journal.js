@@ -2,6 +2,8 @@
 // Règlement automatique à partir des feuilles de match publiées par GitHub Actions.
 import { getCore, playerLogs } from "./data.js";
 import { valueOf } from "./model.js";
+import { normName } from "./value.js";
+import { seasonForDate, shiftDateKey } from "./factors.js";
 
 const KEY = "astaria-journal";
 
@@ -52,19 +54,48 @@ export function updateBet(id, patch) {
 
 export function deleteBet(id) { save(loadBets().filter((b) => b.id !== id)); }
 
+function grade(b, log) {
+  const v = valueOf(log, b.market);
+  b.result = v;
+  b.status = v === b.line ? "push" : (b.side === "over" ? v > b.line : v < b.line) ? "won" : "lost";
+  b.settledAt = new Date().toISOString();
+  b.auto = true;
+}
+
+// Pari libre : on retrouve le joueur par son nom et son match à la date du pari (ou le lendemain).
+async function settleFree(b) {
+  if (!b.gameDate) return false;
+  const season = seasonForDate(new Date(Date.UTC(+b.gameDate.slice(0, 4), +b.gameDate.slice(4, 6) - 1, +b.gameDate.slice(6, 8))));
+  const core = await getCore(season);
+  if (!core?.players) return false;
+  const target = normName(b.player);
+  const hit = Object.entries(core.players).find(([, p]) => normName(p.name) === target)
+    || Object.entries(core.players).find(([, p]) => normName(p.name).endsWith(` ${target.split(" ").pop()}`) && normName(p.name)[0] === target[0]);
+  if (!hit) return false;
+  const [pid, idx] = hit;
+  const until = shiftDateKey(b.gameDate, 1);
+  const log = (await playerLogs(core, season, pid)).find((l) => l.d >= b.gameDate && l.d <= until);
+  if (log) { b.playerId = pid; b.eventId = log.e; b.season = season; grade(b, log); return true; }
+  // Son équipe a joué (match intégré) mais pas lui → remboursé.
+  const team = core.teams[idx.teamId];
+  const played = team?.games.find((g) => g.d >= b.gameDate && g.d <= until && core.processed[g.e]);
+  if (played) { b.playerId = pid; b.eventId = played.e; b.season = season; b.status = "void"; b.result = null; b.settledAt = new Date().toISOString(); return true; }
+  return false;
+}
+
 export async function settleAll() {
   const bets = loadBets();
   let changed = false;
   for (const b of bets.filter((x) => x.status === "pending")) {
-    const core = await getCore(b.season);
-    if (!core?.processed?.[b.eventId]) continue; // match pas encore intégré
-    const log = (await playerLogs(core, b.season, b.playerId)).find((l) => l.e === b.eventId);
-    if (!log) { b.status = "void"; b.result = null; changed = true; continue; } // n'a pas joué → remboursé
-    const v = valueOf(log, b.market);
-    b.result = v;
-    b.status = v === b.line ? "push" : (b.side === "over" ? v > b.line : v < b.line) ? "won" : "lost";
-    b.settledAt = new Date().toISOString();
-    changed = true;
+    try {
+      if (b.eventId === "manual" || b.playerId === "manual") { if (await settleFree(b)) changed = true; continue; }
+      const core = await getCore(b.season);
+      if (!core?.processed?.[b.eventId]) continue; // match pas encore intégré
+      const log = (await playerLogs(core, b.season, b.playerId)).find((l) => l.e === b.eventId);
+      if (!log) { b.status = "void"; b.result = null; b.settledAt = new Date().toISOString(); changed = true; continue; } // n'a pas joué → remboursé
+      grade(b, log);
+      changed = true;
+    } catch { /* données indisponibles : on réessaiera */ }
   }
   if (changed) save(bets);
   return bets;

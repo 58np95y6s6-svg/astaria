@@ -40,10 +40,10 @@ export function marketConsensus(offers, line) {
  * offers = [{book, line, over, under}]
  * Retourne un pari par (bookmaker, ligne, côté), trié par EV décroissante.
  */
-export function evaluate(key, statProj, offers, { wModel = 0.6 } = {}) {
+export function evaluate(key, statProj, offers, { wModel = 0.6, allBooks = false } = {}) {
   const picks = [];
   for (const o of offers) {
-    if (!SHOWN_BOOKS.has(o.book)) continue; // les autres books ne servent qu'au consensus
+    if (!allBooks && !SHOWN_BOOKS.has(o.book)) continue; // les autres books ne servent qu'au consensus
     const p = probLine(statProj.dist, o.line);
     const cons = marketConsensus(offers, o.line);
     const hrL10Over = hitRate(statProj.l10Values, o.line, "over");

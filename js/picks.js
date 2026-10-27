@@ -1,6 +1,6 @@
 // Top value : projections précalculées (GitHub Actions) + cotes (The Odds API) → paris classés.
 import { MARKETS, negBin, quantile } from "./model.js";
-import { evaluate, normName } from "./value.js";
+import { evaluate, normName, SHOWN_BOOKS, BOOK_LABEL } from "./value.js";
 import { fetchJSON, getGameData } from "./data.js";
 import { getGameOdds } from "./odds.js";
 
@@ -33,6 +33,8 @@ export function cachedTop(scope) {
  */
 export async function topValue(scope, games, { oddsKey, wModel, onProgress } = {}) {
   const picks = [];
+  const targets = [];
+  const diag = [];
   const errors = [];
   let quota = null;
   const todo = games.filter((g) => g.state === "pre");
@@ -46,6 +48,10 @@ export async function topValue(scope, games, { oddsKey, wModel, onProgress } = {
       continue;
     }
     if (odds.quota?.remaining) quota = odds.quota.remaining;
+    // Diagnostic : nombre de cotes joueurs reçues par bookmaker.
+    const count = {};
+    for (const op of Object.values(odds.players)) for (const offers of Object.values(op.markets)) for (const o of offers) count[o.book] = (count[o.book] || 0) + 1;
+    diag.push({ matchup: `${g.away.abbr} @ ${g.home.abbr}`, count });
     const byName = new Map(Object.entries(proj.players).map(([id, p]) => [normName(p.name), [id, p]]));
     for (const [n, op] of Object.entries(odds.players)) {
       const hit = byName.get(n);
@@ -53,7 +59,17 @@ export async function topValue(scope, games, { oddsKey, wModel, onProgress } = {
       const [pid, p] = hit;
       for (const [mk, offers] of Object.entries(op.markets)) {
         if (!p.m[mk]) continue;
-        const list = evaluate(mk, statFromProj(p, mk), offers, { wModel });
+        const sp = statFromProj(p, mk);
+        const base = { playerId: pid, player: p.name, headshot: p.headshot, teamId: p.teamId, gameId: g.id,
+          matchup: `${g.away.abbr} @ ${g.home.abbr}`, season: gd.game.season, gameDate: gd.game.dateKey, status: p.status, avg: p.avg[mk] };
+        // Lignes à viser : d'après les books de référence (Pinnacle, Betfair), quand le modèle est plus optimiste que le marché.
+        for (const r of evaluate(mk, sp, offers, { wModel, allBooks: true })) {
+          if (SHOWN_BOOKS.has(r.book) || r.pMarket == null) continue;
+          const edge = r.pModel - r.pMarket;
+          if (r.pFinal < 0.55 || edge < 0.03) continue;
+          targets.push({ ...r, ...base, edge, minOdds: Math.round(r.fair * 1.03 * 100) / 100 });
+        }
+        const list = evaluate(mk, sp, offers, { wModel });
         for (const b of list) {
           picks.push({ ...b, dist: undefined, playerId: pid, player: p.name, headshot: p.headshot, teamId: p.teamId, gameId: g.id,
             matchup: `${g.away.abbr} @ ${g.home.abbr}`, season: gd.game.season, gameDate: gd.game.dateKey, status: p.status, avg: p.avg[mk] });
@@ -68,7 +84,13 @@ export async function topValue(scope, games, { oddsKey, wModel, onProgress } = {
     const cur = best.get(k);
     if (!cur || p.ev > cur.ev) best.set(k, p);
   }
-  const out = { at: Date.now(), picks: [...best.values()].sort((a, b) => b.ev - a.ev), errors, quota, mode: "odds" };
+  const bestT = new Map();
+  for (const t of targets) {
+    const k = `${t.playerId}|${t.key}|${t.side}`;
+    const cur = bestT.get(k);
+    if (!cur || t.pFinal > cur.pFinal) bestT.set(k, t);
+  }
+  const out = { at: Date.now(), picks: [...best.values()].sort((a, b) => b.ev - a.ev), targets: [...bestT.values()].sort((a, b) => b.edge - a.edge), diag, errors, quota, mode: "odds" };
   ls.set(`astaria-top-${scope}`, out);
   return out;
 }
@@ -95,3 +117,15 @@ export async function topMatchups(scope, games) {
   ls.set(`astaria-top-${scope}`, out);
   return out;
 }
+
+// Résumé lisible du diagnostic : « BKN @ BOS : Winamax 0 · Betclic 0 · réf. Pinnacle 14 ».
+export function diagLines(res) {
+  return (res.diag || []).map((d) => {
+    const fr = ["winamax_fr", "betclic_fr"].map((b) => `${BOOK_LABEL[b]} ${d.count[b] || 0}`).join(" · ");
+    const ref = Object.entries(d.count).filter(([b]) => !SHOWN_BOOKS.has(b) && b !== "betclic").map(([b, n]) => `${BOOK_LABEL[b] || b} ${n}`).join(", ");
+    return `${d.matchup} : ${fr}${ref ? ` · réf. ${ref}` : ""}`;
+  });
+}
+
+// Aucune cote Winamax/Betclic reçue sur l'ensemble du scan ?
+export const noFrOdds = (res) => (res.diag || []).length > 0 && res.diag.every((d) => !d.count.winamax_fr && !d.count.betclic_fr);

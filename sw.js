@@ -1,6 +1,6 @@
 // Service worker : l'app s'ouvre instantanément et fonctionne hors ligne
 // avec les dernières données consultées.
-const VERSION = "ibibet-v6";
+const VERSION = "ibibet-v7";
 const SHELL = [
   "./", "index.html", "styles.css", "manifest.webmanifest",
   "js/app.js", "js/model.js", "js/value.js", "js/factors.js", "js/data.js", "js/odds.js", "js/journal.js", "js/picks.js",

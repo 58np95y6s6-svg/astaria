@@ -2,7 +2,7 @@ import { MARKETS, project, probLine, averages, shotProfile, valueOf } from "./mo
 import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName } from "./value.js";
 import { getDay, getGameData, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
 import { getGameOdds, cachedGameOdds, quota as oddsQuota, testKey } from "./odds.js";
-import { topValue, topMatchups, cachedTop } from "./picks.js";
+import { topValue, topMatchups, cachedTop, diagLines, noFrOdds } from "./picks.js";
 import { addBet as journalAdd, deleteBet, settleAll, exportBets, importBets } from "./journal.js";
 
 // ---------- utilitaires ----------
@@ -118,10 +118,35 @@ function matchupRow(r) {
     <div class="center"><span class="chip good">${sgnPct(r.edge)}</span></div></a>`;
 }
 
+function targetRow(t) {
+  return `<a class="pick row" href="#/player/${t.playerId}/${t.gameId}/${t.teamId}">
+    ${img(t.headshot, "av")}
+    <div class="grow"><div class="main ell">${esc(t.player)}</div>
+    <div class="small muted ell">${esc(MARKETS[t.key].short)} ${t.side === "over" ? "Over" : "Under"} ${t.line} · ${pct(t.pFinal)} · réf. ${esc(t.bookLabel)} ${f2(t.odds)}</div></div>
+    <div class="center"><div class="small muted">prends si</div><div class="odds num">≥ ${f2(t.minOdds)}</div></div></a>`;
+}
+
+// Bloc commun « résultats d'un scan » : value FR, sinon lignes à viser, + diagnostic.
+function scanResultsHTML(res, limit = 5) {
+  const pos = res.picks.filter((p) => p.ev > 0);
+  let html = "";
+  if (pos.length) html += pos.slice(0, limit).map(topRow).join("");
+  else if (noFrOdds(res) && res.targets?.length) {
+    html += `<div class="note warn" style="margin:4px 0 8px">Winamax et Betclic n'ont pas encore publié de cotes joueurs. Voici les <b>lignes à viser</b> : vérifie la cote sur ton appli, et prends le pari seulement si elle atteint la cote minimale.</div>`
+      + res.targets.slice(0, limit).map(targetRow).join("");
+  } else if (noFrOdds(res)) html += `<div class="empty">Winamax et Betclic n'ont pas encore publié de cotes joueurs pour ces matchs. Réessaie plus tard dans la journée.</div>`;
+  else html += `<div class="empty">Cotes Winamax/Betclic reçues, mais aucune n'a de value pour l'instant.</div>`;
+  const dl = diagLines(res);
+  if (dl.length || res.errors?.length) html += `<details class="mini"><summary>Détail du scan</summary><div class="small muted">${[...dl, ...(res.errors || [])].map(esc).join("<br>")}</div></details>`;
+  return html;
+}
+
 function topSummary(res) {
   if (!res || res.mode !== "odds") return "Meilleurs matchups (gratuit) · scan des cotes à la demande";
   const pos = res.picks.filter((p) => p.ev > 0);
-  return pos.length ? `${Math.min(5, pos.length)} paris · meilleur ${sgnPct(pos[0].ev)} · ${ago(res.at)}` : `Aucune value pour l'instant · ${ago(res.at)}`;
+  if (pos.length) return `${Math.min(5, pos.length)} paris · meilleur ${sgnPct(pos[0].ev)} · ${ago(res.at)}`;
+  if (noFrOdds(res)) return `Cotes Winamax/Betclic pas encore publiées${res.targets?.length ? ` · ${Math.min(5, res.targets.length)} lignes à viser` : ""} · ${ago(res.at)}`;
+  return `Aucune value pour l'instant · ${ago(res.at)}`;
 }
 
 function mountTop(id, scope, games, title) {
@@ -139,9 +164,7 @@ function mountTop(id, scope, games, title) {
   const scanLabel = `Scanner les cotes (≈${pre * 10} crédits)`;
   const renderOdds = (res) => {
     sub.textContent = topSummary(res);
-    const pos = res.picks.filter((p) => p.ev > 0);
-    body.innerHTML = (pos.length ? pos.slice(0, 5).map(topRow).join("") : `<div class="empty">Aucune cote Winamax/Betclic avec de la value pour l'instant.</div>`)
-      + (res.errors?.length ? `<div class="note">${res.errors.map(esc).join("<br>")}</div>` : "")
+    body.innerHTML = scanResultsHTML(res, 5)
       + `<div class="row between acc-foot"><button class="link" data-scan>↻ Rescanner</button>${res.quota ? `<span class="small muted">${res.quota} crédits restants</span>` : ""}<a class="link" href="#/value">Tout voir ›</a></div>`;
     body.querySelector("[data-scan]").addEventListener("click", scan);
   };
@@ -663,8 +686,9 @@ async function viewValue(token) {
     if (valueState.sort === "ev") list = list.filter((p) => p.ev > 0).sort((a, b) => b.ev - a.ev);
     if (valueState.sort === "p") list.sort((a, b) => b.pFinal - a.pFinal);
     if (valueState.sort === "odds") list = list.filter((p) => p.ev > 0).sort((a, b) => b.odds - a.odds);
-    el.innerHTML = (list.length ? list.slice(0, 40).map(topRow).join("") : `<div class="empty">Aucun pari ne passe les filtres.</div>`)
-      + (res.errors?.length ? `<div class="note">${res.errors.map(esc).join("<br>")}</div>` : "");
+    el.innerHTML = list.length
+      ? list.slice(0, 40).map(topRow).join("") + (diagLines(res).length ? `<details class="mini"><summary>Détail du scan</summary><div class="small muted">${diagLines(res).map(esc).join("<br>")}</div></details>` : "")
+      : scanResultsHTML(res, 20);
   };
   $app.querySelectorAll("[data-sort]").forEach((b) => b.addEventListener("click", () => { valueState.sort = b.dataset.sort; viewValue(token); }));
   const run = async () => {

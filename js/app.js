@@ -3,7 +3,7 @@ import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName, marketConse
 import { getDay, getGameData, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
 import { getGameOdds, cachedGameOdds, quota as oddsQuota, testKey, checkCoverage, SCAN_LEVELS } from "./odds.js";
 import { topValue, topMatchups, cachedTop, diagLines, noFrOdds } from "./picks.js";
-import { addBet as journalAdd, deleteBet, setStatus, updateBet, settleAll, exportBets, importBets } from "./journal.js";
+import { addBet as journalAdd, deleteBet, setStatus, updateBet, settleAll, exportBets, importBets, createCombo, splitCombo } from "./journal.js";
 
 // ---------- utilitaires ----------
 const $app = document.getElementById("app");
@@ -787,6 +787,9 @@ const betDayKey = (b) => b.gameDate || etKey(new Date(b.settledAt || b.createdAt
 const dayLong = (k) => keyToDate(k).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 const dayShort = (k) => `${k.slice(6, 8)}/${k.slice(4, 6)}`;
 const initials = (name) => String(name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+const jState = { combine: false, sel: new Set() };
+const legIcon = (st) => ({ won: "✓", lost: "✗", push: "↺", void: "–", pending: "•" }[st] || "•");
+const legLine = (l) => `<div class="jleg ${l.status}"><span class="jleg-i">${legIcon(l.status)}</span><div class="grow ell"><b>${esc(l.player)}</b> · ${esc(MARKETS[l.market]?.short || l.market)} ${l.side === "under" ? "Moins" : "Plus"} ${l.line}${l.result != null ? ` <span class="muted">(${l.result})</span>` : ""}</div><span class="num">${f2(l.odds)}</span></div>`;
 const betTitle = (b) => `${esc(MARKETS[b.market]?.label || b.market)} · ${b.side === "under" ? "Moins de" : "Plus de"} ${b.line}`;
 
 // Courbe du profit cumulé (SVG fait main).
@@ -841,6 +844,10 @@ function profitBars(done, keyOf, labelOf) {
 }
 
 function betEditBox(b) {
+  if (b.type === "combo") return `<div class="editbox" id="edit-${b.id}" hidden><div class="form">
+    <div><label>Mise (€)</label><input type="number" inputmode="decimal" step="0.5" data-f="stake" value="${b.stake}"></div>
+    <div><label>Cote du combiné</label><input type="number" inputmode="decimal" step="0.01" data-f="odds" value="${b.odds}"></div>
+  </div><button class="btn primary scan-btn" data-save="${b.id}" style="margin-top:10px">Enregistrer</button></div>`;
   return `<div class="editbox" id="edit-${b.id}" hidden><div class="form">
     <div><label>Mise (€)</label><input type="number" inputmode="decimal" step="0.5" data-f="stake" value="${b.stake}"></div>
     <div><label>Cote</label><input type="number" inputmode="decimal" step="0.01" data-f="odds" value="${b.odds}"></div>
@@ -850,7 +857,35 @@ function betEditBox(b) {
   </div><button class="btn primary scan-btn" data-save="${b.id}" style="margin-top:10px">Enregistrer</button></div>`;
 }
 
+function comboCard(b) {
+  const sameGame = new Set(b.legs.map((l) => l.eventId)).size < b.legs.length;
+  return `<div class="card jbet jcombo">
+    <div class="row jbet-head">
+      <div class="jav combo">🔗</div>
+      <div class="grow"><div class="jbet-name ell">Combiné · ${b.legs.length} sélections</div><div class="small muted ell">${esc(b.matchup || "")}${b.book && b.book !== "mixed" ? ` · ${esc(BOOK_LABEL[b.book] || b.book)}` : ""}</div></div>
+      <div class="jodds num">${f2(b.odds)}</div>
+    </div>
+    <div class="jlegs">${b.legs.map(legLine).join("")}</div>
+    ${b.pFinal != null ? `<div class="small muted" style="margin:6px 2px 0">Proba estimée du combiné : <b>${pct(b.pFinal)}</b>${sameGame ? " · ⚠️ sélections du même match, corrélées" : ""}</div>` : sameGame ? `<div class="small muted" style="margin:6px 2px 0">⚠️ Sélections du même match : résultats corrélés</div>` : ""}
+    <div class="jstats"><div><span>Mise</span><b class="num">${eur(b.stake)}</b></div><div><span>Gain potentiel</span><b class="num up">+${eur(b.stake * (b.odds - 1))}</b></div><div><span>Retour</span><b class="num">${eur(b.stake * b.odds)}</b></div></div>
+    <div class="jact">
+      <button class="jbtn won" data-set="${b.id}|won">✓ Gagné</button><button class="jbtn lost" data-set="${b.id}|lost">✗ Perdu</button><button class="jbtn" data-uncombo="${b.id}">Défaire</button>
+      <button class="jbtn ico" data-edit="${b.id}" aria-label="Modifier">✎</button><button class="jbtn ico" data-del="${b.id}" aria-label="Supprimer">✕</button>
+    </div>
+    ${betEditBox(b)}
+  </div>`;
+}
+
 function pendingCard(b) {
+  if (b.type === "combo") return comboCard(b);
+  if (jState.combine) {
+    const on = jState.sel.has(b.id);
+    return `<button class="card jbet jpick${on ? " on" : ""}" data-pick="${b.id}">
+      <span class="jcheck" aria-hidden="true">${on ? "✓" : ""}</span>
+      <span class="grow" style="text-align:left"><span class="jbet-name ell" style="display:block">${esc(b.player)}</span>
+      <span class="small muted">${esc(MARKETS[b.market]?.short || b.market)} ${b.side === "under" ? "Moins" : "Plus"} ${b.line} · ${esc(BOOK_LABEL[b.book] || b.book)}${b.matchup ? ` · ${esc(b.matchup)}` : ""}</span></span>
+      <span class="jodds num">${f2(b.odds)}</span></button>`;
+  }
   const meta = [b.matchup && esc(b.matchup), b.gameDate && dayShort(b.gameDate), esc(BOOK_LABEL[b.book] || b.book)].filter(Boolean).join(" · ");
   return `<div class="card jbet">
     <div class="row jbet-head">
@@ -870,6 +905,24 @@ function pendingCard(b) {
 
 function settledRow(b) {
   const p = betProfit(b);
+  if (b.type === "combo") {
+    const icon = { won: "✓", lost: "✗", push: "↺", void: "–" }[b.status] || "";
+    return `<details class="jrow ${b.status}"><summary>
+      <div class="jav st">${icon}</div>
+      <div class="grow"><div class="jbet-name ell">🔗 Combiné · ${b.legs.length} sélections</div>
+        <div class="small ell muted">${b.legs.map((l) => `${legIcon(l.status)} ${esc(l.player.split(" ").pop())}`).join(" · ")}</div></div>
+      <div class="jrow-r"><b class="num ${p > 0 ? "up" : p < 0 ? "down" : "muted"}">${b.status === "push" || b.status === "void" ? J_LABEL[b.status] : sEur(p)}</b><span class="small muted num">${eur(b.stake)} @ ${f2(b.odds)}</span></div>
+    </summary>
+    <div class="jrow-body">
+      <div class="jlegs">${b.legs.map(legLine).join("")}</div>
+      ${b.origOdds ? `<div class="small muted">Cote recalculée (sélection remboursée) : ${f2(b.origOdds)} → ${f2(b.odds)}</div>` : ""}
+      <div class="jact">
+        ${b.manual ? `<button class="jbtn" data-set="${b.id}|pending">↶ Annuler le règlement</button>` : `<span class="small muted grow">Réglé automatiquement</span>`}
+        <button class="jbtn ico" data-edit="${b.id}" aria-label="Modifier">✎</button><button class="jbtn ico" data-del="${b.id}" aria-label="Supprimer">✕</button>
+      </div>
+      ${betEditBox(b)}
+    </div></details>`;
+  }
   const unit = MARKETS[b.market]?.parts?.length === 1 ? ` ${MARKETS[b.market].short.toLowerCase()}` : "";
   const res = b.result != null ? `<b>${b.result}${esc(unit)}</b> vs ${b.line}` : b.status === "void" ? "n'a pas joué" : "réglé à la main";
   const icon = { won: "✓", lost: "✗", push: "↺", void: "–" }[b.status] || "";
@@ -939,8 +992,8 @@ async function viewJournal(token, keep) {
       <div class="row between"><h2 style="margin:0">Évolution du profit</h2>${settled.length ? `<span class="chip ${profit > 0 ? "good" : profit < 0 ? "bad" : ""} num">${sEur(profit)}</span>` : ""}</div>
       ${profitCurve(done)}
       ${done.length ? `<div class="jsplit-h"><span class="small muted">Profit par</span><div class="jmini" role="tablist"><button class="on" data-split="market">Marché</button><button data-split="book">Bookmaker</button></div></div>
-      <div data-split-p="market">${profitBars(done, (b) => b.market, (k) => MARKETS[k]?.label || k)}</div>
-      <div data-split-p="book" hidden>${profitBars(done, (b) => b.book, (k) => BOOK_LABEL[k] || k)}</div>` : ""}
+      <div data-split-p="market">${profitBars(done, (b) => b.market, (k) => MARKETS[k]?.label || (k === "combo" ? "Combinés" : k))}</div>
+      <div data-split-p="book" hidden>${profitBars(done, (b) => b.book, (k) => BOOK_LABEL[k] || (k === "mixed" ? "Plusieurs books" : k))}</div>` : ""}
     </div>
     <div class="jtabs" role="tablist">
       <button role="tab" data-jtab="pending" class="${tab === "pending" ? "on" : ""}">En cours <span>${pending.length}</span></button>
@@ -958,12 +1011,26 @@ async function viewJournal(token, keep) {
           <div><label>Bookmaker</label><select id="fbook"><option value="winamax_fr">Winamax</option><option value="betclic_fr">Betclic</option></select></div>
           <div><label>Mise (€)</label><input type="number" inputmode="decimal" step="0.5" id="fstake" value="1"></div>
         </div><button class="btn primary scan-btn" id="freeAdd" style="margin-top:10px">+ Ajouter au journal</button></div></details>
-      ${pending.length ? pending.map(pendingCard).join("") : `<div class="card empty">Aucun pari en cours.<br><span class="small">Ajoute-en depuis une fiche joueur (« + Journal ») ou via « Pari libre ».</span></div>`}
+      ${pending.filter((b) => b.type !== "combo").length >= 2 ? `<div class="row between jcombo-bar-top">
+        ${jState.combine ? `<span class="small"><b>Mode combiné</b> · touche les paris à combiner</span><button class="btn sm" data-combine="off">Annuler</button>`
+          : `<span class="small muted">${pending.length} en cours</span><button class="btn sm" data-combine="on">🔗 Faire un combiné</button>`}</div>` : ""}
+      ${pending.length ? (jState.combine ? pending.filter((b) => b.type !== "combo") : pending).map(pendingCard).join("") : `<div class="card empty">Aucun pari en cours.<br><span class="small">Ajoute-en depuis une fiche joueur (« + Journal ») ou via « Pari libre ».</span></div>`}
     </section>
     <section data-jpanel="settled"${tab === "settled" ? "" : " hidden"}>${settledHTML}</section>
     ${buckets.length ? `<details class="acc"><summary><div class="grow"><b>Fiabilité du modèle</b><div class="small muted">proba annoncée vs réussite réelle</div></div><span class="chev" aria-hidden="true"></span></summary><div class="acc-body"><table><thead><tr><th>Proba annoncée</th><th>Paris</th><th>Attendu</th><th>Réel</th></tr></thead><tbody>
       ${buckets.map((x) => `<tr><td>${(x.a * 100).toFixed(0)}–${Math.min(100, x.b * 100).toFixed(0)} %</td><td>${x.n}</td><td>${pct(x.exp / x.n)}</td><td>${pct(x.hit / x.n)}</td></tr>`).join("")}
       </tbody></table><div class="note">Si « Réel » reste nettement sous « Attendu » sur 100+ paris, le modèle est trop optimiste : baisse le poids du modèle dans ⚙︎ Réglages.</div></div></details>` : ""}
+    ${jState.combine ? (() => {
+      const sel = pending.filter((b) => jState.sel.has(b.id));
+      const odds = sel.reduce((t, b) => t * b.odds, 1);
+      const p = sel.length && sel.every((b) => b.pFinal != null) ? sel.reduce((t, b) => t * b.pFinal, 1) : null;
+      return `<div class="combobar">
+        <div class="row between"><b>${sel.length} sélection${sel.length > 1 ? "s" : ""}</b><span>cote <b class="num">${sel.length ? f2(odds) : "–"}</b>${p != null ? ` · proba ${pct(p)}` : ""}</span></div>
+        <div class="row" style="margin-top:8px"><input type="number" inputmode="decimal" step="0.5" id="cstake" placeholder="Mise (€)" style="flex:1">
+        <button class="btn primary" id="cmake"${sel.length < 2 ? " disabled" : ""}>Créer le combiné</button></div>
+        ${sel.length >= 2 ? `<div class="small" id="cgain" data-odds="${odds}" style="margin-top:6px;opacity:.85">Saisis ta mise pour voir le gain potentiel</div>` : ""}
+      </div>`;
+    })() : ""}
     <div class="card jsave">
       <div class="row"><button class="btn grow" id="jexp">⬇︎ Exporter</button><label class="btn grow" style="margin:0;color:inherit;font-size:15px">⬆︎ Importer<input type="file" id="jimp" accept="application/json" hidden></label></div>
       <p class="small muted" style="margin:10px 2px 0">Réglage automatique dès que la feuille de match est intégrée (toutes les 30 min). Le journal reste sur cet appareil : exporte-le pour le sauvegarder.</p>
@@ -1014,6 +1081,31 @@ async function viewJournal(token, keep) {
       toast("Ajouté ✓"); again();
     } catch (e) { toast(e.message); }
   });
+  $app.querySelectorAll("[data-combine]").forEach((b) => b.addEventListener("click", () => {
+    jState.combine = b.dataset.combine === "on"; jState.sel.clear(); again();
+  }));
+  $app.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => {
+    const id = b.dataset.pick;
+    jState.sel.has(id) ? jState.sel.delete(id) : jState.sel.add(id);
+    again();
+  }));
+  document.getElementById("cstake")?.addEventListener("input", (e) => {
+    const g = document.getElementById("cgain");
+    const st = parseFloat(String(e.target.value).replace(",", "."));
+    if (g) g.textContent = st > 0 ? `Gain potentiel : +${eur(st * (+g.dataset.odds - 1))} · retour ${eur(st * +g.dataset.odds)}` : "Saisis ta mise pour voir le gain potentiel";
+  });
+  document.getElementById("cmake")?.addEventListener("click", () => {
+    try {
+      const st = parseFloat(String(document.getElementById("cstake").value).replace(",", "."));
+      const c = createCombo([...jState.sel], st);
+      jState.combine = false; jState.sel.clear();
+      toast(`Combiné créé ✓ cote ${f2(c.odds)}`); again();
+    } catch (e) { toast(e.message); }
+  });
+  $app.querySelectorAll("[data-uncombo]").forEach((b) => b.addEventListener("click", () => {
+    if (!confirm("Défaire ce combiné en paris simples ?")) return;
+    splitCombo(b.dataset.uncombo); toast("Combiné défait"); again();
+  }));
   $app.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
     if (!confirm("Supprimer ce pari ?")) return;
     deleteBet(b.dataset.del);

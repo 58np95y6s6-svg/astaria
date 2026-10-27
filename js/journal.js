@@ -44,7 +44,8 @@ export function updateBet(id, patch) {
   const bets = loadBets();
   const b = bets.find((x) => x.id === id);
   if (!b) return;
-  for (const k of ["stake", "odds", "line"]) if (Number.isFinite(patch[k]) && patch[k] > 0) b[k] = patch[k];
+  for (const k of b.type === "combo" ? ["stake", "odds"] : ["stake", "odds", "line"]) if (Number.isFinite(patch[k]) && patch[k] > 0) b[k] = patch[k];
+  if (b.type === "combo") { save(bets); return; }
   if (patch.side === "over" || patch.side === "under") b.side = patch.side;
   if (patch.book) b.book = patch.book;
   // Si le pari était réglé automatiquement, on recalcule son statut avec la nouvelle ligne.
@@ -83,22 +84,81 @@ async function settleFree(b) {
   return false;
 }
 
+// Règle un pari simple ou une sélection de combiné (même forme). Renvoie true si quelque chose a changé.
+async function settleOne(b) {
+  if (b.eventId === "manual" || b.playerId === "manual") return settleFree(b);
+  const core = await getCore(b.season);
+  if (!core?.processed?.[b.eventId]) return false; // match pas encore intégré
+  const log = (await playerLogs(core, b.season, b.playerId)).find((l) => l.e === b.eventId);
+  if (!log) { b.status = "void"; b.result = null; b.settledAt = new Date().toISOString(); return true; } // n'a pas joué → remboursé
+  grade(b, log);
+  return true;
+}
+
+// Statut d'un combiné à partir de ses sélections (règles des bookmakers : remboursé/annulé = cote 1).
+export function comboOutcome(legs) {
+  if (legs.some((l) => l.status === "lost")) return { status: "lost", odds: null };
+  if (legs.some((l) => l.status === "pending")) return { status: "pending", odds: null };
+  const won = legs.filter((l) => l.status === "won");
+  if (!won.length) return { status: "push", odds: 1 };
+  return { status: "won", odds: Math.round(won.reduce((t, l) => t * l.odds, 1) * 100) / 100 };
+}
+
 export async function settleAll() {
   const bets = loadBets();
   let changed = false;
   for (const b of bets.filter((x) => x.status === "pending")) {
     try {
-      if (b.eventId === "manual" || b.playerId === "manual") { if (await settleFree(b)) changed = true; continue; }
-      const core = await getCore(b.season);
-      if (!core?.processed?.[b.eventId]) continue; // match pas encore intégré
-      const log = (await playerLogs(core, b.season, b.playerId)).find((l) => l.e === b.eventId);
-      if (!log) { b.status = "void"; b.result = null; b.settledAt = new Date().toISOString(); changed = true; continue; } // n'a pas joué → remboursé
-      grade(b, log);
-      changed = true;
+      if (b.type === "combo") {
+        for (const leg of b.legs.filter((l) => l.status === "pending")) if (await settleOne(leg)) changed = true;
+        const o = comboOutcome(b.legs);
+        if (o.status !== "pending") {
+          b.status = o.status;
+          if (o.odds != null && o.odds !== b.odds) { b.origOdds = b.odds; b.odds = o.odds; }
+          b.settledAt = new Date().toISOString();
+          changed = true;
+        }
+        continue;
+      }
+      if (await settleOne(b)) changed = true;
     } catch { /* données indisponibles : on réessaiera */ }
   }
   if (changed) save(bets);
   return bets;
+}
+
+const LEG_FIELDS = ["player", "playerId", "eventId", "season", "gameDate", "matchup", "market", "side", "line", "odds", "book", "pFinal", "pModel", "status", "result", "settledAt"];
+
+// Regroupe des paris simples en cours en un combiné (cote = produit des cotes).
+export function createCombo(ids, stake) {
+  const bets = loadBets();
+  const legs = ids.map((id) => bets.find((b) => b.id === id)).filter((b) => b && b.status === "pending" && b.type !== "combo");
+  if (legs.length < 2) throw new Error("Sélectionne au moins 2 paris en cours");
+  const odds = Math.round(legs.reduce((t, l) => t * l.odds, 1) * 100) / 100;
+  const allP = legs.every((l) => l.pFinal != null);
+  const books = [...new Set(legs.map((l) => l.book))];
+  const combo = {
+    id: crypto.randomUUID?.() || String(Date.now() + Math.random()), createdAt: new Date().toISOString(), status: "pending", type: "combo",
+    legs: legs.map((l) => Object.fromEntries(LEG_FIELDS.map((k) => [k, l[k] ?? null]))),
+    player: `Combiné · ${legs.length} sélections`, market: "combo", side: null, line: null,
+    odds, stake: Number(stake) > 0 ? Number(stake) : legs[0].stake, book: books.length === 1 ? books[0] : "mixed",
+    pFinal: allP ? legs.reduce((t, l) => t * l.pFinal, 1) : null,
+    gameDate: legs.map((l) => l.gameDate).filter(Boolean).sort()[0] || null,
+    matchup: [...new Set(legs.map((l) => l.matchup).filter(Boolean))].join(", "),
+  };
+  const rest = bets.filter((b) => !legs.includes(b));
+  rest.unshift(combo);
+  if (!save(rest)) throw new Error("Stockage du téléphone indisponible");
+  return combo;
+}
+
+// Défait un combiné en cours : ses sélections redeviennent des paris simples (mise du combiné sur chacune).
+export function splitCombo(id) {
+  const bets = loadBets();
+  const c = bets.find((b) => b.id === id && b.type === "combo");
+  if (!c) return;
+  const singles = c.legs.map((l) => ({ ...l, id: crypto.randomUUID?.() || String(Date.now() + Math.random()), createdAt: c.createdAt, status: l.status === "pending" ? "pending" : l.status, stake: c.stake }));
+  save([...singles, ...bets.filter((b) => b.id !== id)]);
 }
 
 export function exportBets() {

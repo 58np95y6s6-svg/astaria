@@ -87,4 +87,22 @@ test("pipeline complet", async () => {
   const free = b2.find((b) => b.line === 99.5);
   assert.equal(free.status, "won");
   assert.equal(free.eventId, "9002");
+
+  // Combiné : cote = produit, règlement par sélection, défaire
+  const a1 = j.addBet({ eventId: "9002", season: 2027, playerId: "101", player: "Jayson Tatum", market: "pts", side: "over", line: 5.5, odds: 1.5, pFinal: 0.8 });
+  const a2 = j.addBet({ eventId: "9002", season: 2027, playerId: "999", player: "DNP Guy", market: "pts", side: "over", line: 0.5, odds: 2 });
+  const combo = j.createCombo([a1.id, a2.id], 10);
+  assert.equal(combo.odds, 3);
+  assert.equal(combo.legs.length, 2);
+  const b3 = await j.settleAll();
+  const c3 = b3.find((b) => b.id === combo.id);
+  assert.equal(c3.status, "won", "Tatum gagné + DNP remboursé → gagné");
+  assert.equal(c3.odds, 1.5, "la sélection remboursée compte pour 1");
+  assert.deepEqual(j.comboOutcome([{ status: "won", odds: 2 }, { status: "lost", odds: 2 }]).status, "lost");
+  const a3 = j.addBet({ eventId: "9999", season: 2027, playerId: "101", player: "X", market: "pts", side: "over", line: 1, odds: 1.8 });
+  const a4 = j.addBet({ eventId: "9999", season: 2027, playerId: "102", player: "Y", market: "pts", side: "over", line: 1, odds: 1.9 });
+  const c4 = j.createCombo([a3.id, a4.id], 5);
+  j.splitCombo(c4.id);
+  const b4 = j.loadBets();
+  assert.ok(!b4.some((b) => b.id === c4.id) && b4.filter((b) => b.player === "X" || b.player === "Y").length === 2);
 });

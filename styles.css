@@ -304,3 +304,18 @@ img.av, .ph.av { width: 42px; height: 42px; border-radius: 14px; object-fit: cov
 
 .jsave { padding: 12px; }
 .jsave .btn { min-height: 42px; }
+
+/* ---------- Combinés ---------- */
+.jcombo-bar-top { margin: 4px 2px 10px; gap: 8px; }
+.jpick { width: 100%; display: flex; align-items: center; gap: 12px; border: 2px solid transparent; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.jpick.on { border-color: var(--accent); }
+.jcheck { width: 28px; height: 28px; border-radius: 9px; border: 2px solid var(--line); display: grid; place-items: center; font-weight: 800; color: #fff; flex: none; }
+.jpick.on .jcheck { background: var(--accent); border-color: var(--accent); }
+.jav.combo { background: var(--navy); font-size: 18px; }
+.jlegs { margin-top: 10px; display: grid; gap: 6px; }
+.jleg { display: flex; align-items: center; gap: 8px; font-size: 13px; background: var(--soft); border-radius: 10px; padding: 7px 10px; }
+.jleg-i { width: 20px; text-align: center; font-weight: 800; color: var(--muted); }
+.jleg.won .jleg-i { color: var(--good); } .jleg.lost .jleg-i { color: var(--bad); }
+.combobar { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 15; background: var(--navy); color: #fff; border-radius: 18px; padding: 12px 14px; box-shadow: 0 10px 30px rgba(20, 24, 60, .35); margin: 12px 0; }
+.combobar input { background: var(--navy2); color: #fff; }
+.combobar input::placeholder { color: var(--navy-muted); }

@@ -165,19 +165,19 @@ function mountTop(id, scope, games, title) {
   const renderOdds = (res) => {
     sub.textContent = topSummary(res);
     body.innerHTML = scanResultsHTML(res, 5)
-      + `<div class="row between acc-foot"><button class="link" data-scan>↻ Rescanner</button>${res.quota ? `<span class="small muted">${res.quota} crédits restants</span>` : ""}<a class="link" href="#/value">Tout voir ›</a></div>`;
-    body.querySelector("[data-scan]").addEventListener("click", scan);
+      + `<div class="row between acc-foot"><button class="link" data-rescan>↻ Rescanner</button>${res.quota ? `<span class="small muted">${res.quota} crédits restants</span>` : ""}<a class="link" href="#/value">Tout voir ›</a></div>`;
+    body.querySelector("[data-rescan]").addEventListener("click", () => scan(true));
   };
   const renderMatchups = (res) => {
     body.innerHTML = `<div class="small muted" style="margin:2px 0 4px">Projections au-dessus de la moyenne grâce au matchup</div>`
       + (res.rows.length ? res.rows.slice(0, 5).map(matchupRow).join("") : `<div class="empty">Pas encore de projections pour ces matchs.</div>`)
       + `<div class="acc-foot">${settings.oddsKey ? `<button class="btn primary scan-btn" data-scan>📡 ${scanLabel}</button>` : `<a class="btn scan-btn" href="#/settings">Ajouter ma clé de cotes pour scanner</a>`}</div>`;
-    body.querySelector("[data-scan]")?.addEventListener("click", scan);
+    body.querySelector("[data-scan]")?.addEventListener("click", () => scan(false));
   };
-  async function scan() {
+  async function scan(force = false) {
     body.innerHTML = loader("Scan des cotes Winamax / Betclic…");
     try {
-      const res = await topValue(scope, games, { oddsKey: settings.oddsKey, wModel: settings.wModel, onProgress: (i, n) => { sub.textContent = `Scan du match ${i}/${n}…`; } });
+      const res = await topValue(scope, games, { oddsKey: settings.oddsKey, wModel: settings.wModel, force, onProgress: (i, n) => { sub.textContent = `Scan du match ${i}/${n}…`; } });
       if (host.isConnected) renderOdds(res);
     } catch (e) { body.innerHTML = errorBox(e); }
   }
@@ -697,7 +697,7 @@ async function viewValue(token) {
     btn.disabled = true;
     try {
       const games = (await getDay(today))?.games || [];
-      const res = await topValue(scope, games, { oddsKey: settings.oddsKey, wModel: settings.wModel, onProgress: (i, n) => { document.getElementById("vsub").textContent = `match ${i}/${n}…`; } });
+      const res = await topValue(scope, games, { oddsKey: settings.oddsKey, wModel: settings.wModel, force: !!cachedTop(scope), onProgress: (i, n) => { document.getElementById("vsub").textContent = `match ${i}/${n}…`; } });
       if (!stale(token)) show(res);
     } catch (e) { document.getElementById("picks").innerHTML = errorBox(e); } finally { btn.disabled = false; }
   };

@@ -73,3 +73,15 @@ test("evaluate : value détectée quand la cote dépasse la cote juste", () => {
   assert.ok(best.ev > 0.1);
   assert.ok(best.pMarket > 0.6);
 });
+
+test("evaluate : paliers (Over seul, sans Under)", () => {
+  const logs = Array.from({ length: 15 }, (_, i) => mkLog(i));
+  const p = project({ logs, factors: {}, pace: { team: 100, opp: 100 }, home: true });
+  const picks = evaluate("pts", p.stats.pts, [
+    { book: "winamax_fr", line: 14.5, over: 1.01, under: null },
+    { book: "winamax_fr", line: 24.5, over: 2.4, under: null },
+  ]);
+  assert.equal(picks.length, 2);
+  assert.ok(picks.every((x) => x.side === "over" && x.pMarket == null));
+  assert.equal(picks[0].line, 24.5, "le palier à 2.40 a plus de value que celui à 1.01");
+});

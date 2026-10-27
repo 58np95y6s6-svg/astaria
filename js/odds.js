@@ -11,6 +11,14 @@ export const MARKET_MAP = {
   player_points_rebounds: "pr", player_points_assists: "pa", player_rebounds_assists: "ra",
   player_blocks_steals: "sb",
 };
+// Paliers (« Plus de 14,5 / 19,5 / 24,5… » chez Winamax) : marchés « alternate », Over uniquement.
+export const ALT_MARKET_MAP = {
+  player_points_alternate: "pts", player_rebounds_alternate: "reb", player_assists_alternate: "ast",
+  player_threes_alternate: "fg3m", player_steals_alternate: "stl", player_blocks_alternate: "blk",
+  player_points_rebounds_assists_alternate: "pra", player_points_rebounds_alternate: "pr",
+  player_points_assists_alternate: "pa", player_rebounds_assists_alternate: "ra",
+};
+const ALL_MARKETS = { ...MARKET_MAP, ...ALT_MARKET_MAP };
 // Winamax et Betclic sont les seuls affichés ; Pinnacle et Betfair servent de référence invisible (même coût).
 const BOOKS = "winamax_fr,betclic_fr,pinnacle,betfair_ex_eu";
 const TTL = 10 * 60e3;
@@ -48,7 +56,7 @@ function normalize(body) {
   const players = {};
   for (const bm of body?.bookmakers || []) {
     for (const m of bm.markets || []) {
-      const mk = MARKET_MAP[m.key];
+      const mk = ALL_MARKETS[m.key];
       if (!mk) continue;
       const rows = {};
       for (const o of m.outcomes || []) {
@@ -69,7 +77,7 @@ function normalize(body) {
 function pruneCache() {
   try {
     for (const k of Object.keys(localStorage)) {
-      if (!k.startsWith("astaria-odds-game-")) continue;
+      if (!k.startsWith("ibibet-odds-v2-game-")) continue;
       const v = ls.get(k);
       if (!v || Date.now() - v.fetchedAtMs > 2 * 86400e3) localStorage.removeItem(k);
     }
@@ -78,7 +86,7 @@ function pruneCache() {
 
 // Cotes déjà en cache (aucun crédit consommé), sinon null.
 export function cachedGameOdds(gameId) {
-  const c = ls.get(`astaria-odds-game-${gameId}`);
+  const c = ls.get(`ibibet-odds-v2-game-${gameId}`);
   return c && Date.now() - c.fetchedAtMs < TTL ? { ...c, cached: true } : null;
 }
 
@@ -86,20 +94,21 @@ export function quota() { return ls.get("astaria-odds-quota"); }
 
 export async function getGameOdds(game, apiKey, { force = false } = {}) {
   if (!apiKey) return { available: false, reason: "no_key" };
-  const ck = `astaria-odds-game-${game.id}`;
+  const ck = `ibibet-odds-v2-game-${game.id}`;
   const cached = ls.get(ck);
   if (cached && !force && Date.now() - cached.fetchedAtMs < TTL) return { ...cached, cached: true };
   if (game.state === "post") return cached ? { ...cached, cached: true } : { available: false, reason: "finished" };
   try {
     const ev = await findEvent(apiKey, game);
     if (!ev) return { available: false, reason: "event_not_found" };
-    const markets = Object.keys(MARKET_MAP).join(",");
+    // On n'est facturé que pour les marchés effectivement renvoyés.
     let res;
     try {
-      res = await call(apiKey, `/events/${ev.id}/odds`, { markets, oddsFormat: "decimal", bookmakers: BOOKS });
+      res = await call(apiKey, `/events/${ev.id}/odds`, { markets: Object.keys(ALL_MARKETS).join(","), oddsFormat: "decimal", bookmakers: BOOKS });
     } catch (e) {
       if (e.status !== 422) throw e;
-      res = await call(apiKey, `/events/${ev.id}/odds`, { markets, oddsFormat: "decimal", regions: "eu,us" });
+      // Un marché « alternate » refusé : on se rabat sur les marchés classiques.
+      res = await call(apiKey, `/events/${ev.id}/odds`, { markets: Object.keys(MARKET_MAP).join(","), oddsFormat: "decimal", bookmakers: BOOKS });
     }
     const books = [...new Set((res.body?.bookmakers || []).map((b) => b.key))];
     const out = {

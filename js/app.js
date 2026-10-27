@@ -100,9 +100,9 @@ function gameCard(g) {
     : `<div class="score num">${g.away.score ?? ""} – ${g.home.score ?? ""}</div><div class="muted small">${esc(g.statusText)}</div>`;
   const line = [g.details && `Écart ${esc(g.details)}`, g.total && `Total ${g.total}`].filter(Boolean).join(" · ");
   return `<a class="card game" href="#/game/${g.id}">
-    <div class="team">${img(g.away.logo)}<div class="grow"><div class="nm ell">${esc(g.away.short || g.away.name)}</div><div class="muted small">${esc(g.away.record)}</div></div></div>
+    <div class="team">${img(g.away.logo)}<div class="grow"><div class="nm">${esc(g.away.abbr)}</div><div class="muted small">${esc(g.away.record)}</div></div></div>
     <div class="mid">${mid}${line ? `<div class="muted small">${line}</div>` : ""}</div>
-    <div class="team right">${img(g.home.logo)}<div class="grow"><div class="nm ell">${esc(g.home.short || g.home.name)}</div><div class="muted small">${esc(g.home.record)}</div></div></div>
+    <div class="team right">${img(g.home.logo)}<div class="grow"><div class="nm">${esc(g.home.abbr)}</div><div class="muted small">${esc(g.home.record)}</div></div></div>
   </a>`;
 }
 

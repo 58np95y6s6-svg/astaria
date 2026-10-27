@@ -627,3 +627,19 @@ async function renderStatus(token) {
 }
 
 router();
+
+// ---------- PWA ----------
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+(function installHint() {
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let dismissed = false;
+  try { dismissed = localStorage.getItem("astaria-install-hint") === "0"; } catch {}
+  if (standalone || !ios || dismissed) return;
+  const el = document.getElementById("installHint");
+  el.className = "install";
+  el.innerHTML = `<div class="card"><img src="icons/apple-touch-icon.png" alt=""><div class="grow">Installe l'app : touche <b>Partager</b> <span aria-hidden="true">⬆︎</span> puis <b>« Sur l'écran d'accueil »</b>.</div><button aria-label="Fermer">✕</button></div>`;
+  el.querySelector("button").addEventListener("click", () => { el.remove(); try { localStorage.setItem("astaria-install-hint", "0"); } catch {} });
+})();

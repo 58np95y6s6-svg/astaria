@@ -200,3 +200,4 @@ img.av, .ph.av { width: 42px; height: 42px; border-radius: 14px; object-fit: cov
 .tile.on { background: var(--navy); color: #fff; }
 .tile.on .tl, .tile.on .tr { color: var(--navy-muted); }
 .scan-btn { width: 100%; padding: 13px; font-size: 15px; }
+.ai-btn { width: 100%; margin: 2px 0 4px; padding: 13px; background: var(--navy); color: #fff; font-size: 15px; box-shadow: var(--shadow); }

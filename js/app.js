@@ -446,6 +446,7 @@ function renderPlayer(st) {
       </div>
     </div>
     <div class="tiles">${tiles}</div>
+    <button class="btn ai-btn" data-ai>🧠 Analyse IA avec Claude</button>
     ${bestCard}
     ${marketCard}
     ${acc("minutes", "Minutes & contexte", minutesCard, [d.b2b && "back-to-back", d.injuries.missing?.length && `${d.injuries.missing.length} absent(s)`, `rythme ×${f2(proj.context.pace)}`].filter(Boolean).join(" · "))}
@@ -457,6 +458,13 @@ function renderPlayer(st) {
     ${acc("logs", "10 derniers matchs", recent ? `<div class="scroll"><table><thead><tr><th>Date</th><th>Adv.</th><th>Min</th><th>Pts</th><th>Reb</th><th>PD</th><th>3pts</th><th>Int</th><th>Ctr</th><th>PRA</th></tr></thead><tbody>${recent}</tbody></table></div>` : `<div class="muted">Aucun match cette saison.</div>`)}`;
 
   $app.querySelectorAll("details[data-acc]").forEach((el) => el.addEventListener("toggle", () => { el.open ? playerState.open.add(el.dataset.acc) : playerState.open.delete(el.dataset.acc); }));
+  $app.querySelector("[data-ai]").addEventListener("click", () => {
+    const text = buildAIPrompt(d, proj, st, allPicks);
+    // Tout se fait dans le geste de l'utilisateur (sinon iOS bloque l'ouverture / la copie).
+    navigator.clipboard?.writeText(text).catch(() => {});
+    window.open(`https://claude.ai/new?q=${encodeURIComponent(text)}`, "_blank", "noopener");
+    toast("Message copié ✓ — colle-le si le champ est vide");
+  });
   $app.querySelectorAll("[data-tile]").forEach((b) => b.addEventListener("click", () => {
     playerState.market = b.dataset.tile; renderPlayer(st);
     document.getElementById("mkt")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -487,6 +495,58 @@ function renderPlayer(st) {
     st.odds = await getGameOdds(g, settings.oddsKey, { force });
     if (location.hash.includes(`/player/${d.player.id}/`)) renderPlayer(st);
   }));
+}
+
+// ---------- Message pour l'analyse IA (Claude) ----------
+function buildAIPrompt(d, proj, st, picks) {
+  const g = d.game;
+  const r1 = (x) => (x == null || !Number.isFinite(x) ? "–" : (Math.round(x * 10) / 10).toString());
+  const season = averages(d.logs);
+  const l10 = averages(d.logs.slice(-10));
+  const prior = d.prior ? averages(d.prior) : null;
+  const keys = ["pts", "reb", "ast", "fg3m", "stl", "blk", "pra", "pr", "pa", "ra"];
+  const projLines = keys.map((k) => {
+    const s = proj.stats[k];
+    return `- ${MARKETS[k].label} : projection ${r1(s.mean)} (médiane ${s.median}, 50 % entre ${s.p25} et ${s.p75}) · saison ${r1(season[k])} · 10 derniers ${r1(l10[k])}${prior ? ` · saison passée ${r1(prior[k])}` : ""}`;
+  }).join("\n");
+  const F = d.opp.factors, R = d.opp.ranks;
+  const grp = GROUP_LABEL[d.player.group] || "joueurs";
+  const fx = (k) => `${((F[k] ?? 1) - 1) >= 0 ? "+" : ""}${Math.round(((F[k] ?? 1) - 1) * 100)} %${R[k] ? ` (${R[k]}e/${d.opp.nTeams} plus généreuse)` : ""}`;
+  const prof = shotProfile(d.logs.length >= 3 ? d.logs : [...(d.prior || []), ...d.logs]);
+  const logs = d.logs.slice(-10).reverse().map((l) => `${l.d.slice(6, 8)}/${l.d.slice(4, 6)} ${l.home ? "vs" : "@"} ${teamAbbr(d, l.opp)} : ${Math.round(l.min)} min, ${l.pts} pts, ${l.reb} reb, ${l.ast} pd, ${l.fg3m}/${l.fg3a} à 3 pts, ${l.stl} int, ${l.blk} ctr`).join("\n");
+  const odds = picks.filter((p) => SHOWN_BOOKS.has(p.book)).sort((a, b) => b.ev - a.ev).slice(0, 12)
+    .map((p) => `- ${p.bookLabel} · ${p.label} ${p.side === "over" ? "Over" : "Under"} ${p.line} @ ${p.odds.toFixed(2)} → proba estimée ${Math.round(p.pFinal * 100)} %, cote juste ${p.fair ? p.fair.toFixed(2) : "–"}, value ${p.ev >= 0 ? "+" : ""}${Math.round(p.ev * 100)} %`).join("\n");
+  const inj = d.injuries.missing?.length ? d.injuries.missing.map((x) => `${x.name} (${r1(x.mpg)} min/m)`).join(", ") : "aucun absent notable de la rotation";
+  const m = proj.minutes;
+  return `Tu es un analyste expert en paris NBA (props joueurs). Analyse le match à venir de ${d.player.name} et propose les meilleurs paris chez Winamax ou Betclic.
+
+FORMAT DE RÉPONSE OBLIGATOIRE (en français, concis) :
+1. 🎯 PROPOSITIONS — en premier, sous forme de liste : pour chaque pari conseillé (1 à 3 max) : marché, Over/Under, ligne, bookmaker et cote, probabilité estimée, niveau de confiance (/5), mise suggérée en % de bankroll (max 3 %). Puis 1 à 2 paris À ÉVITER.
+2. 📋 EXPLICATIONS — seulement ensuite : scénario du match (rythme, écart, temps de jeu), matchup défensif, forme récente, risques (blessure, blowout, rotation, back-to-back).
+Si aucune cote n'est fournie, propose les lignes à viser (seuil Over/Under et cote minimale intéressante). Vérifie si possible les dernières infos (blessures, compo) avant de conclure. N'invente aucune donnée.
+
+MATCH : ${d.teamName} ${d.home ? "reçoit" : "à"} ${d.oppName} — ${parisDay(g.date)} ${parisTime(g.date)} (heure de Paris)
+Écart prévu : ${d.spread == null ? "inconnu" : `${d.spread > 0 ? "+" : ""}${d.spread} pour ${d.teamName}`} · Total : ${g.total ?? "inconnu"}
+Back-to-back : ${d.b2b ? "oui" : "non"} (adversaire : ${d.oppB2b ? "oui" : "non"}) · Rythme attendu ×${proj.context.pace.toFixed(2)}
+
+JOUEUR : ${d.player.name} (${d.player.pos || "?"}, ${grp})${d.playerInjury ? ` — statut : ${d.playerInjury.status} ${d.playerInjury.detail || ""}` : ""}
+Minutes projetées : ${r1(proj.minutesUsed)} (saison ${r1(m.season)}, 10 derniers ${r1(m.l10)}${m.prior ? `, saison passée ${r1(m.prior)}` : ""})${m.adjustments.length ? ` · ajustements : ${m.adjustments.map((a) => `${a.label} ${a.delta >= 0 ? "+" : ""}${r1(a.delta)}`).join(", ")}` : ""}
+Absents dans son équipe : ${inj}
+Matchs joués cette saison : ${d.logs.length}
+
+PROJECTIONS DU MODÈLE :
+${projLines}
+
+MATCHUP — ${d.oppName} face aux ${grp} (par minute, vs moyenne de la ligue, ${d.opp.games} matchs) :
+- Paniers à 2 pts ${fx("fg2m")} · à 3 pts ${fx("fg3m")} · lancers ${fx("ftm")}
+- Points ${fx("pts")} · rebonds ${fx("reb")} · passes ${fx("ast")} · interceptions ${fx("stl")} · contres ${fx("blk")}
+- Profil du joueur : ${Math.round(prof.two * 100)} % de ses points à 2 pts, ${Math.round(prof.three * 100)} % à 3 pts, ${Math.round(prof.ft * 100)} % aux lancers
+
+10 DERNIERS MATCHS :
+${logs || "aucun cette saison"}
+
+COTES WINAMAX / BETCLIC :
+${odds || "non scannées — propose les lignes et cotes minimales à viser"}`;
 }
 
 function teamAbbr(d, id) {

@@ -1,5 +1,5 @@
-import { MARKETS, project, probLine, averages, shotProfile, valueOf, kelly } from "./model.js";
-import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName } from "./value.js";
+import { MARKETS, project, probLine, averages, shotProfile, valueOf, kelly, blend } from "./model.js";
+import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName, marketConsensus } from "./value.js";
 import { getDay, getGameData, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
 import { getGameOdds, cachedGameOdds, quota as oddsQuota, testKey, checkCoverage, SCAN_LEVELS } from "./odds.js";
 import { topValue, topMatchups, cachedTop, diagLines, noFrOdds } from "./picks.js";
@@ -389,11 +389,31 @@ function renderPlayer(st) {
   const best = eligible.filter((p) => p.ev > 0).sort((a, b) => b.ev - a.ev).slice(0, 5);
   const bestKeys = new Set(best.map((p) => `${p.key}|${p.side}|${p.line}`));
   const safest = eligible.filter((p) => p.ev >= 0 && !bestKeys.has(`${p.key}|${p.side}|${p.line}`)).sort((a, b) => b.pFinal - a.pFinal).slice(0, 3);
+  // Lignes à viser : cotes de référence (books US, Pinnacle) quand le modèle est plus optimiste que le marché.
+  const tmap = new Map();
+  for (const k of Object.keys(MARKETS)) {
+    const offs = playerOffers(st, k);
+    if (!offs.length) continue;
+    for (const r of evaluate(k, proj.stats[k], offs, { wModel: settings.wModel, allBooks: true })) {
+      if (SHOWN_BOOKS.has(r.book) || r.pMarket == null) continue;
+      const edge = r.pModel - r.pMarket;
+      if (r.pFinal < 0.5 || edge < 0.01) continue;
+      const key = `${k}|${r.side}`;
+      if (!tmap.has(key) || edge > tmap.get(key).edge) tmap.set(key, { ...r, edge, minOdds: Math.round(r.fair * 1.03 * 100) / 100 });
+    }
+  }
+  const pTargets = [...tmap.values()].sort((a, b) => b.edge - a.edge).slice(0, 5);
+  const targetLine = (t) => `<div class="pick row" data-goto="${t.key}|${t.side}|${t.line}">
+    <div class="grow"><div class="main">${esc(t.label)} ${t.side === "over" ? "Plus de" : "Moins de"} ${t.line}</div>
+    <div class="small muted">proba ${pct(t.pFinal)} · avantage ${t.edge >= 0.03 ? "fort" : "léger"} +${Math.round(t.edge * 100)} pts · ligne de référence</div></div>
+    <div class="center"><div class="small muted">prends si</div><div class="odds num">≥ ${f2(t.minOdds)}</div></div></div>`;
   const oddsInfo = oddsStatus(st.odds);
   const bestCard = `<div class="card">
     <h2>Meilleurs paris</h2>
     ${st.odds == null ? loader("Récupération des cotes…") : ""}
-    ${best.length ? `${best.map((p) => pickRow(p, d)).join("")}` : st.odds && !st.odds.idle ? `<div class="muted">Aucune value détectée${allPicks.length ? "" : " (pas de cotes)"}. Tu peux saisir une cote Winamax/Betclic dans un marché ci-dessous.</div>` : ""}
+    ${best.length ? `${best.map((p) => pickRow(p, d)).join("")}`
+      : pTargets.length ? `<div class="small muted" style="margin-bottom:4px">Lignes à viser : vérifie la cote sur Winamax et joue seulement si elle atteint le seuil (puis « Mon pari » pour l'ajouter au journal).</div>${pTargets.map(targetLine).join("")}`
+      : st.odds && !st.odds.idle ? `<div class="muted">Aucun avantage détecté sur les lignes du marché. Tu peux saisir une cote Winamax dans « Mon pari ».</div>` : ""}
     ${safest.length ? `<details class="mini"><summary>Les plus probables (${safest.length})</summary>${safest.map((p) => pickRow(p, d)).join("")}</details>` : ""}
     ${oddsInfo}
   </div>`;
@@ -419,7 +439,20 @@ function renderPlayer(st) {
       const t = ps ? tag(ps) : null;
       return `<tr><td>${esc(BOOK_LABEL[o.book] || o.book)}</td><td>${o.line}</td><td>${f2(o.over)}</td><td>${f2(o.under)}</td>
       <td>${ps ? `<span class="chip ${t.cls}">${ps.side === "over" ? "Over" : "Under"} ${sgnPct(ps.ev)}</span>` : "–"}</td></tr>`;
-    }).join("")}</tbody></table></div>` : `<div class="muted small">Pas de cote reçue pour ce marché.</div>`;
+    }).join("")}</tbody></table></div>` : "";
+  // Ligne(s) du marché d'après les bookmakers de référence, avec la cote minimale à exiger chez Winamax.
+  const refCount = {};
+  for (const o of offers) if (!SHOWN_BOOKS.has(o.book) && o.over && o.under) refCount[o.line] = (refCount[o.line] || 0) + 1;
+  const refLines = Object.entries(refCount).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([l]) => +l).sort((a, b) => a - b);
+  const refHtml = refLines.length ? `<div class="scroll"><table><thead><tr><th>Ligne marché</th><th>Plus de</th><th>Moins de</th></tr></thead><tbody>${refLines.map((l) => {
+    const pl = probLine(sp.dist, l);
+    const cons = marketConsensus(offers, l);
+    const pO = blend(pl.over, cons == null ? null : cons * (1 - pl.push), settings.wModel);
+    const pU = blend(pl.under, cons == null ? null : (1 - cons) * (1 - pl.push), settings.wModel);
+    const cell = (p) => `${pct(p)} · cote ≥ <b>${f2(((1 - pl.push) / p) * 1.03)}</b>`;
+    return `<tr><td><b>${l}</b> <span class="small muted">(${refCount[l]} books)</span></td><td>${cell(pO)}</td><td>${cell(pU)}</td></tr>`;
+  }).join("")}</tbody></table></div><div class="small muted">Cote minimale à exiger chez Winamax pour avoir de la value (proba modèle + marché).</div>` : "";
+  const offersBlock = offersHtml + refHtml || `<div class="muted small">${st.odds?.idle ? "Cotes non scannées : utilise les cotes justes ci-dessous ou scanne le match." : "Pas de cote reçue pour ce marché."}</div>`;
 
   const tabs = Object.entries(MARKETS).map(([k, v]) => `<button data-mk="${k}" class="${k === mk ? "on" : ""}">${v.short}</button>`).join("");
   const marketCard = `<div class="card" id="mkt">
@@ -439,7 +472,7 @@ function renderPlayer(st) {
       <div id="mres" class="small" style="margin-top:8px"></div>
       <button class="btn primary scan-btn" id="mjournal" style="margin-top:10px">+ Ajouter au journal</button>
     </div>
-    <h3>Cotes</h3>${offersHtml}
+    <h3>Cotes</h3>${offersBlock}
     <h3>Probabilités par ligne (modèle seul)</h3>
     <div class="scroll"><table><thead><tr><th>Ligne</th><th>P(Over)</th><th>Cote juste</th><th>P(Under)</th><th>Cote juste</th><th>10 dern.</th></tr></thead><tbody>${ladder}</tbody></table></div>
     <div class="note">Une cote est « value » si elle est <b>supérieure à la cote juste</b>.</div>
@@ -493,6 +526,11 @@ function renderPlayer(st) {
     window.open(`https://claude.ai/new?q=${encodeURIComponent(text)}`, "_blank", "noopener");
     toast("Message copié ✓ — colle-le si le champ est vide");
   });
+  $app.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => {
+    const [k, side, line] = b.dataset.goto.split("|");
+    playerState.market = k; playerState.prefill = { side, line }; renderPlayer(st);
+    document.querySelector(".betbox")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }));
   $app.querySelectorAll("[data-tile]").forEach((b) => b.addEventListener("click", () => {
     playerState.market = b.dataset.tile; renderPlayer(st);
     document.getElementById("mkt")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -523,6 +561,11 @@ function renderPlayer(st) {
     return { line, side, p, pl, odds, e, stakeSug };
   };
   ["mline", "modds", "mside"].forEach((id) => document.getElementById(id).addEventListener("input", calc));
+  if (playerState.prefill) {
+    document.getElementById("mside").value = playerState.prefill.side;
+    document.getElementById("mline").value = playerState.prefill.line;
+    playerState.prefill = null;
+  }
   calc();
   document.getElementById("mjournal").addEventListener("click", () => {
     const c = calc();
@@ -640,7 +683,7 @@ function oddsStatus(o) {
   if (o.available) {
     const fr = o.frBooks?.length ? o.frBooks.map((b) => BOOK_LABEL[b] || b).join(", ") : null;
     return `<div class="note">Cotes ${o.cached ? "en cache" : "à jour"} (${new Date(o.fetchedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })})
-      · ${fr ? esc(fr) : "Winamax et Betclic n'ont pas encore publié de cotes joueurs sur ce match"}${o.quota?.remaining ? ` · ${o.quota.remaining} crédits restants` : ""}
+      · ${fr ? esc(fr) : "lignes de référence (cotes Winamax/Betclic non fournies par la source)"}${o.quota?.remaining ? ` · ${o.quota.remaining} crédits restants` : ""}
       <button class="btn sm" data-scan-odds style="margin-left:6px">↻ Rafraîchir</button></div>`;
   }
   const msg = { no_key: "Pas de clé The Odds API (⚙︎ Réglages) : saisis tes cotes Winamax/Betclic à la main ci-dessous.", event_not_found: "Match pas encore listé par le fournisseur de cotes.", finished: "Match terminé.", error: `Cotes indisponibles : ${o.error || ""}` }[o.reason] || "Cotes indisponibles.";

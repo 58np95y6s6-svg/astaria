@@ -31,7 +31,7 @@ export function cachedTop(scope) {
  * games : matchs (objets de days/<date>.json). Retourne { picks, errors, quota, at }.
  * Un pari par (joueur, marché, côté) : la meilleure cote parmi les bookmakers.
  */
-export async function topValue(scope, games, { oddsKey, wModel, onProgress, force = false } = {}) {
+export async function topValue(scope, games, { oddsKey, wModel, onProgress, force = false, level = "essential" } = {}) {
   const picks = [];
   const targets = [];
   const diag = [];
@@ -42,7 +42,7 @@ export async function topValue(scope, games, { oddsKey, wModel, onProgress, forc
     onProgress?.(i + 1, todo.length);
     const [proj, gd] = await Promise.all([getProjections(g.id), getGameData(g.id).catch(() => null)]);
     if (!proj || !gd) { errors.push(`${g.away.abbr} @ ${g.home.abbr} : projections pas encore prêtes`); continue; }
-    const odds = await getGameOdds(gd.game, oddsKey, { force });
+    const odds = await getGameOdds(gd.game, oddsKey, { force, level });
     if (!odds.available) {
       errors.push(`${g.away.abbr} @ ${g.home.abbr} : ${odds.reason === "event_not_found" ? "cotes pas encore publiées" : odds.error || odds.reason}`);
       continue;

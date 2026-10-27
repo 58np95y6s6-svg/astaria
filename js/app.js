@@ -1,7 +1,7 @@
 import { MARKETS, project, probLine, averages, shotProfile, valueOf } from "./model.js";
 import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName } from "./value.js";
 import { getDay, getGameData, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
-import { getGameOdds, cachedGameOdds, quota as oddsQuota, testKey } from "./odds.js";
+import { getGameOdds, cachedGameOdds, quota as oddsQuota, testKey, checkCoverage, SCAN_LEVELS } from "./odds.js";
 import { topValue, topMatchups, cachedTop, diagLines, noFrOdds } from "./picks.js";
 import { addBet as journalAdd, deleteBet, settleAll, exportBets, importBets } from "./journal.js";
 
@@ -15,9 +15,10 @@ const sgnPct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${(x * 100).toFi
 const GROUP_LABEL = { G: "arrières", F: "ailiers", C: "pivots" };
 
 const settings = (() => {
-  const def = { bankroll: 100, wModel: 0.6, oddsKey: "" };
+  const def = { bankroll: 100, wModel: 0.6, oddsKey: "", scanLevel: "essential" };
   try { return { ...def, ...JSON.parse(localStorage.getItem("astaria-settings") || "{}") }; } catch { return def; }
 })();
+const scanCost = () => (SCAN_LEVELS[settings.scanLevel] || SCAN_LEVELS.essential).cost;
 function saveSettings() { try { localStorage.setItem("astaria-settings", JSON.stringify(settings)); } catch {} }
 
 function toast(msg) {
@@ -62,7 +63,7 @@ function router() {
   document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === nav));
   for (const [re, fn] of routes) {
     const m = h.match(re);
-    if (m) { window.scrollTo(0, 0); fn(token, ...m.slice(1)); return; }
+    if (m) { document.getElementById("scroller")?.scrollTo(0, 0); fn(token, ...m.slice(1)); return; }
   }
   $app.innerHTML = `<div class="empty">Page introuvable. <a href="#/">Retour</a></div>`;
 }
@@ -161,7 +162,7 @@ function mountTop(id, scope, games, title) {
   const det = host.querySelector("details");
   const sub = host.querySelector("[data-sub]");
   const body = host.querySelector("[data-body]");
-  const scanLabel = `Scanner les cotes (≈${pre * 10} crédits)`;
+  const scanLabel = `Scanner les cotes (≈${pre * scanCost()} crédits max)`;
   const renderOdds = (res) => {
     sub.textContent = topSummary(res);
     body.innerHTML = scanResultsHTML(res, 5)
@@ -177,7 +178,7 @@ function mountTop(id, scope, games, title) {
   async function scan(force = false) {
     body.innerHTML = loader("Scan des cotes Winamax / Betclic…");
     try {
-      const res = await topValue(scope, games, { oddsKey: settings.oddsKey, wModel: settings.wModel, force, onProgress: (i, n) => { sub.textContent = `Scan du match ${i}/${n}…`; } });
+      const res = await topValue(scope, games, { oddsKey: settings.oddsKey, wModel: settings.wModel, level: settings.scanLevel, force, onProgress: (i, n) => { sub.textContent = `Scan du match ${i}/${n}…`; } });
       if (host.isConnected) renderOdds(res);
     } catch (e) { body.innerHTML = errorBox(e); }
   }
@@ -515,7 +516,7 @@ function renderPlayer(st) {
     const force = !st.odds?.idle;
     st.odds = null;
     renderPlayer(st);
-    st.odds = await getGameOdds(g, settings.oddsKey, { force });
+    st.odds = await getGameOdds(g, settings.oddsKey, { force, level: settings.scanLevel });
     if (location.hash.includes(`/player/${d.player.id}/`)) renderPlayer(st);
   }));
 }
@@ -603,7 +604,7 @@ function teamAbbr(d, id) {
 
 function scanButton(label = "Scanner les cotes Winamax / Betclic") {
   return settings.oddsKey
-    ? `<button class="btn primary scan-btn" data-scan-odds>📡 ${label}</button><div class="small muted center" style="margin-top:6px">≈10 crédits pour tout le match · ${oddsQuota()?.remaining ? `${oddsQuota().remaining} restants` : "500/mois"}</div>`
+    ? `<button class="btn primary scan-btn" data-scan-odds>📡 ${label}</button><div class="small muted center" style="margin-top:6px">≈${scanCost()} crédits max pour tout le match · ${oddsQuota()?.remaining ? `${oddsQuota().remaining} restants` : "500/mois"}</div>`
     : `<a class="btn scan-btn" href="#/settings">Ajouter ma clé de cotes pour scanner</a>`;
 }
 
@@ -673,7 +674,7 @@ async function viewValue(token) {
         <span class="small muted">Winamax & Betclic</span>
         <button class="btn primary sm" id="scanAll">${settings.oddsKey ? "📡 Scanner les cotes" : "Ajouter ma clé"}</button>
       </div>
-      <div class="small muted" style="margin-top:6px">≈10 crédits par match, puis 10 min de cache.</div>
+      <div class="small muted" style="margin-top:6px">≈${scanCost()} crédits max par match (niveau « ${SCAN_LEVELS[settings.scanLevel]?.label || "Essentiel"} »), puis 10 min de cache.</div>
     </div>
     <div class="tabs"><button data-sort="ev" class="${valueState.sort === "ev" ? "on" : ""}">Meilleure value</button><button data-sort="p" class="${valueState.sort === "p" ? "on" : ""}">Plus probables</button><button data-sort="odds" class="${valueState.sort === "odds" ? "on" : ""}">Meilleure cote</button></div>
     <div id="picks" class="card">${loader()}</div>`;
@@ -697,7 +698,7 @@ async function viewValue(token) {
     btn.disabled = true;
     try {
       const games = (await getDay(today))?.games || [];
-      const res = await topValue(scope, games, { oddsKey: settings.oddsKey, wModel: settings.wModel, force: !!cachedTop(scope), onProgress: (i, n) => { document.getElementById("vsub").textContent = `match ${i}/${n}…`; } });
+      const res = await topValue(scope, games, { oddsKey: settings.oddsKey, wModel: settings.wModel, level: settings.scanLevel, force: !!cachedTop(scope), onProgress: (i, n) => { document.getElementById("vsub").textContent = `match ${i}/${n}…`; } });
       if (!stale(token)) show(res);
     } catch (e) { document.getElementById("picks").innerHTML = errorBox(e); } finally { btn.disabled = false; }
   };
@@ -762,7 +763,14 @@ async function viewSettings(token) {
       <div><label>Clé The Odds API</label><input type="password" id="ok" value="${esc(settings.oddsKey)}" autocomplete="off" placeholder="colle ta clé ici"></div>
     </div>
     <div class="row wrap" style="margin-top:-2px"><button class="btn sm" id="testk">Tester la clé (gratuit)</button><span class="small" id="testkr"></span></div>
-    <div class="note">Clé gratuite sur <a href="https://the-odds-api.com/#get-access" target="_blank" rel="noopener" style="text-decoration:underline">the-odds-api.com</a> (500 crédits/mois, ≈10 par match ouvert). Elle reste sur cet appareil. Sans clé, tu peux saisir tes cotes à la main.</div>
+    <div class="card">
+      <label>Cotes scannées</label>
+      <select id="lvl">${Object.entries(SCAN_LEVELS).map(([k, v]) => `<option value="${k}"${settings.scanLevel === k ? " selected" : ""}>${v.label} — ≈${v.cost} crédits/match max</option>`).join("")}</select>
+      <div class="small muted" style="margin-top:6px">Essentiel = PTS, REB, PD, 3PTS, P+R+PD. Avec 500 crédits/mois (≈16/jour), reste sur Essentiel et scanne seulement les matchs qui t'intéressent.</div>
+      <div class="row wrap" style="margin-top:10px"><button class="btn sm" id="cov">Vérifier Winamax/Betclic (≈1 crédit)</button></div>
+      <div class="small" id="covr" style="margin-top:6px"></div>
+    </div>
+    <div class="note">Clé gratuite sur <a href="https://the-odds-api.com/#get-access" target="_blank" rel="noopener" style="text-decoration:underline">the-odds-api.com</a> (500 crédits/mois). Elle reste sur cet appareil. Sans clé, tu peux saisir tes cotes à la main.</div>
     <div class="note">Le poids du modèle règle la confiance accordée à nos projections face au consensus des bookmakers (Pinnacle et Betfair servent de référence, sans être affichés). 60 % est un bon départ ; ajuste selon la fiabilité mesurée dans le Journal.</div>
     <div class="card" id="dstatus">${loader("État des données…")}</div>`;
   document.getElementById("bk").addEventListener("change", (e) => { settings.bankroll = Math.max(1, +e.target.value || 100); saveSettings(); toast("Enregistré"); });
@@ -770,6 +778,14 @@ async function viewSettings(token) {
   wm.addEventListener("input", () => { document.getElementById("wmv").textContent = `${Math.round(wm.value * 100)} %`; });
   wm.addEventListener("change", () => { settings.wModel = +wm.value; saveSettings(); toast("Enregistré"); });
   document.getElementById("ok").addEventListener("change", (e) => { settings.oddsKey = e.target.value.trim(); saveSettings(); toast("Clé enregistrée"); });
+  document.getElementById("lvl").addEventListener("change", (e) => { settings.scanLevel = e.target.value; saveSettings(); toast("Enregistré"); });
+  document.getElementById("cov").addEventListener("click", async (e) => {
+    const out = document.getElementById("covr");
+    if (!settings.oddsKey) { out.textContent = "Ajoute d'abord ta clé."; return; }
+    e.target.disabled = true; out.textContent = "Vérification…";
+    try { out.textContent = (await checkCoverage(settings.oddsKey)).msg; }
+    catch (er) { out.textContent = er.status === 401 ? "Clé invalide" : `Erreur : ${er.message}`; } finally { e.target.disabled = false; }
+  });
   document.getElementById("testk").addEventListener("click", async (e) => {
     const k = document.getElementById("ok").value.trim();
     if (k !== settings.oddsKey) { settings.oddsKey = k; saveSettings(); }
@@ -799,6 +815,17 @@ async function renderStatus(token) {
 }
 
 router();
+
+// ---------- Comportement d'app native ----------
+// Pas de zoom (pincement iOS, double-tap), pas de menu en appui long sur les éléments d'interface.
+["gesturestart", "gesturechange", "gestureend"].forEach((t) => document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+let lastTouch = 0;
+document.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastTouch < 300 && !e.target.closest("input, select, textarea")) e.preventDefault();
+  lastTouch = now;
+}, { passive: false });
+document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
 // ---------- PWA ----------
 if ("serviceWorker" in navigator) {

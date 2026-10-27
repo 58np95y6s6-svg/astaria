@@ -92,27 +92,37 @@ export function cachedGameOdds(gameId) {
 
 export function quota() { return ls.get("astaria-odds-quota"); }
 
-export async function getGameOdds(game, apiKey, { force = false } = {}) {
+// Niveaux de scan : on n'est facturé que pour les marchés renvoyés, mais on limite par défaut.
+export const SCAN_LEVELS = {
+  essential: { label: "Essentiel", cost: 5, markets: ["player_points", "player_rebounds", "player_assists", "player_threes", "player_points_rebounds_assists"] },
+  full: { label: "Complet", cost: 11, markets: Object.keys(MARKET_MAP) },
+  paliers: { label: "Complet + paliers", cost: 21, markets: Object.keys(ALL_MARKETS) },
+};
+const LEVEL_RANK = { essential: 0, full: 1, paliers: 2 };
+
+export async function getGameOdds(game, apiKey, { force = false, level = "essential" } = {}) {
   if (!apiKey) return { available: false, reason: "no_key" };
+  if (!SCAN_LEVELS[level]) level = "essential";
   const ck = `ibibet-odds-v2-game-${game.id}`;
   const cached = ls.get(ck);
-  if (cached && !force && Date.now() - cached.fetchedAtMs < TTL) return { ...cached, cached: true };
+  const cacheOk = cached && Date.now() - cached.fetchedAtMs < TTL && (LEVEL_RANK[cached.level] ?? 2) >= LEVEL_RANK[level];
+  if (cacheOk && !force) return { ...cached, cached: true };
   if (game.state === "post") return cached ? { ...cached, cached: true } : { available: false, reason: "finished" };
   try {
     const ev = await findEvent(apiKey, game);
     if (!ev) return { available: false, reason: "event_not_found" };
-    // On n'est facturé que pour les marchés effectivement renvoyés.
     let res;
     try {
-      res = await call(apiKey, `/events/${ev.id}/odds`, { markets: Object.keys(ALL_MARKETS).join(","), oddsFormat: "decimal", bookmakers: BOOKS });
+      res = await call(apiKey, `/events/${ev.id}/odds`, { markets: SCAN_LEVELS[level].markets.join(","), oddsFormat: "decimal", bookmakers: BOOKS });
     } catch (e) {
-      if (e.status !== 422) throw e;
+      if (e.status !== 422 || level !== "paliers") throw e;
       // Un marché « alternate » refusé : on se rabat sur les marchés classiques.
-      res = await call(apiKey, `/events/${ev.id}/odds`, { markets: Object.keys(MARKET_MAP).join(","), oddsFormat: "decimal", bookmakers: BOOKS });
+      level = "full";
+      res = await call(apiKey, `/events/${ev.id}/odds`, { markets: SCAN_LEVELS.full.markets.join(","), oddsFormat: "decimal", bookmakers: BOOKS });
     }
     const books = [...new Set((res.body?.bookmakers || []).map((b) => b.key))];
     const out = {
-      available: true, fetchedAt: new Date().toISOString(), fetchedAtMs: Date.now(), quota: res.quota,
+      available: true, level, fetchedAt: new Date().toISOString(), fetchedAtMs: Date.now(), quota: res.quota,
       books, frBooks: books.filter((b) => SHOWN_BOOKS.has(b)), players: normalize(res.body),
     };
     pruneCache();
@@ -122,6 +132,23 @@ export async function getGameOdds(game, apiKey, { force = false } = {}) {
     const msg = e.status === 401 ? "clé The Odds API invalide" : e.status === 429 ? "quota de crédits épuisé" : e.message === "Failed to fetch" ? "connexion impossible au fournisseur de cotes" : e.message;
     return { available: false, reason: "error", error: msg };
   }
+}
+
+// Vérifie (≈1 crédit) si Winamax / Betclic publient des cotes joueurs via la source,
+// sur le premier match NBA à venir, marché « points » uniquement.
+export async function checkCoverage(apiKey) {
+  const { body: events } = await call(apiKey, "/events", {});
+  const ev = (events || []).find((e) => new Date(e.commence_time).getTime() > Date.now());
+  if (!ev) return { ok: false, msg: "Aucun match NBA à venir pour tester." };
+  const { body, quota } = await call(apiKey, `/events/${ev.id}/odds`, { markets: "player_points", oddsFormat: "decimal", bookmakers: BOOKS });
+  const n = (k) => (body?.bookmakers || []).find((b) => b.key === k)?.markets?.[0]?.outcomes?.length || 0;
+  const w = n("winamax_fr"), bc = n("betclic_fr"), pin = n("pinnacle") + n("betfair_ex_eu");
+  const match = `${ev.away_team} @ ${ev.home_team}`;
+  let verdict;
+  if (w || bc) verdict = "✅ Winamax/Betclic disponibles : le scan fonctionnera.";
+  else if (pin) verdict = "❌ Pas de cotes joueurs Winamax/Betclic via la source (la référence Pinnacle/Betfair, elle, répond). Utilise la saisie manuelle ou les lignes à viser.";
+  else verdict = "⏳ Aucune cote joueurs publiée pour l'instant sur ce match : réessaie plus près du match.";
+  return { ok: true, msg: `${match} — Winamax ${w} · Betclic ${bc} · réf. ${pin}. ${verdict}${quota.remaining ? ` (${quota.remaining} crédits restants)` : ""}` };
 }
 
 // Vérifie la clé sans consommer de crédit (la liste des sports est gratuite).

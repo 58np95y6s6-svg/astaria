@@ -1,4 +1,4 @@
-# Astaria NBA
+# iBiBet
 
 Outil de projection de stats joueurs NBA et de détection de paris « value » (Winamax, Betclic…). Tout tourne sur GitHub, sans serveur ni compte supplémentaire.
 

@@ -2,7 +2,7 @@
 const SITE = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
 const WEB = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba";
 
-const UA = { "User-Agent": "Mozilla/5.0 (astaria-nba)", Accept: "application/json" };
+const UA = { "User-Agent": "Mozilla/5.0 (ibibet)", Accept: "application/json" };
 
 export async function getJSON(url, { retries = 2, timeoutMs = 8000 } = {}) {
   let lastErr;

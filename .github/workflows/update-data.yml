@@ -45,8 +45,8 @@ jobs:
       - name: Publier
         working-directory: data-out
         run: |
-          git config user.name "astaria-bot"
-          git config user.email "astaria-bot@users.noreply.github.com"
+          git config user.name "ibibet-bot"
+          git config user.email "ibibet-bot@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then echo "Rien de nouveau"; exit 0; fi
           # Un seul commit (historique écrasé) pour garder la branche légère.

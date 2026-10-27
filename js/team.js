@@ -96,8 +96,11 @@ export function teamLabel(bet, game) {
     case "ml": return `${t.abbr} vainqueur`;
     case "lead": return `${t.abbr} gagne ou possède une avance de ${Math.abs(ln)} pts`;
     case "spread": {
+      // Formulation Betclic : +10.5 = « gagne ou perd de 10 pts ou − » ; −10.5 = « gagne de 11 pts ou + ».
       const x = Math.abs(ln);
-      return ln > 0 ? `${t.abbr} gagne ou perd de moins de ${x} (+${x})` : ln < 0 ? `${t.abbr} gagne de plus de ${x} (−${x})` : `${t.abbr} handicap 0`;
+      if (ln > 0) return `${t.abbr} gagne ou perd de ${Number.isInteger(x) ? `moins de ${x}` : `${Math.floor(x)} pts ou −`}`;
+      if (ln < 0) return `${t.abbr} gagne de ${Number.isInteger(x) ? `plus de ${x}` : `${Math.ceil(x)} pts ou +`}`;
+      return `${t.abbr} handicap 0`;
     }
     case "total": return `Total match ${bet.side === "under" ? "Moins" : "Plus"} de ${ln}`;
     case "teamtotal": return `${t.abbr} ${bet.side === "under" ? "Moins" : "Plus"} de ${ln} pts`;

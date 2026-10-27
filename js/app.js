@@ -316,9 +316,8 @@ function mountTeamBets(data) {
         <div class="betbox">
           <div class="row between"><b>Mon pari sur le match</b><span class="small muted">calcul instantané</span></div>
           <div class="form" style="margin-top:8px">
-            <div><label>Type</label><select id="tmk">${Object.entries(TEAM_MARKETS).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></div>
+            <div><label>Type</label><select id="tmk">${[["ml", "Vainqueur"], ["spreadPlus", "Gagne ou perd de X pts ou −"], ["spreadMinus", "Gagne de X pts ou +"], ["lead", "Gagne ou possède une avance de X pts"], ["total", "Total du match"], ["teamtotal", "Total d'une équipe"]].map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></div>
             <div data-tf="team"><label>Équipe</label><select id="tteam"><option value="${g.home.id}">${esc(g.home.abbr)}</option><option value="${g.away.id}">${esc(g.away.abbr)}</option></select></div>
-            <div data-tf="spr" hidden style="grid-column:1/-1"><label>Handicap</label><select id="tspr"><option value="-1">Gagne par + de X pts</option><option value="1">Gagne ou perd par − de X pts</option></select></div>
             <div data-tf="side" hidden><label>Côté</label><select id="tside"><option value="over">Plus de</option><option value="under">Moins de</option></select></div>
             <div data-tf="line" hidden><label id="tlinel">Ligne</label><input type="number" inputmode="decimal" step="0.5" id="tline"></div>
             <div><label>Cote</label><input type="number" inputmode="decimal" step="0.01" id="todds" placeholder="1.85"></div>
@@ -352,15 +351,18 @@ function mountTeamBets(data) {
       host.querySelector('[data-tf="team"]').hidden = mk === "total";
       host.querySelector('[data-tf="side"]').hidden = !(mk === "total" || mk === "teamtotal");
       host.querySelector('[data-tf="line"]').hidden = mk === "ml";
-      host.querySelector('[data-tf="spr"]').hidden = mk !== "spread";
-      $("tlinel").textContent = mk === "spread" ? "X (écart en points)" : mk === "lead" ? "X (points d'avance)" : "Ligne";
-      $("thint").textContent = mk === "spread" ? "Betclic « perd de 10 ou − » → X = 10,5 · « gagne de 11 ou + » → X = 10,5" : mk === "lead" ? "Betclic « possède 18 points d'avance ou gagne » → X = 18" : "";
+      const spr = mk === "spreadPlus" || mk === "spreadMinus";
+      $("tlinel").textContent = spr ? "X (le nombre affiché par Betclic)" : mk === "lead" ? "X (points d'avance)" : "Ligne";
+      $("thint").textContent = mk === "spreadPlus" ? "Betclic « ne perd pas ou perd de 10 ou − » → X = 10 (= handicap +10,5)" : mk === "spreadMinus" ? "Betclic « gagne de 11 ou + » → X = 11 (= handicap −10,5)" : mk === "lead" ? "Betclic « possède 18 points d'avance ou gagne » → X = 18" : "";
     };
     const current = () => {
       const mk = $("tmk").value;
       const raw = num("tline");
-      const line = mk === "ml" ? null : mk === "spread" ? Math.abs(raw) * Number($("tspr").value) : raw;
-      const bet = { market: mk, teamId: mk === "total" ? null : $("tteam").value, side: mk === "total" || mk === "teamtotal" ? $("tside").value : null, line };
+      // Nombre Betclic → handicap : « perd de 10 ou − » = +10.5 ; « gagne de 11 ou + » = −10.5 (un .5 saisi est gardé tel quel).
+      const x = Math.abs(raw);
+      const line = mk === "ml" ? null : mk === "spreadPlus" ? (Number.isInteger(x) ? x + 0.5 : x) : mk === "spreadMinus" ? -(Number.isInteger(x) ? x - 0.5 : x) : raw;
+      const market = mk === "spreadPlus" || mk === "spreadMinus" ? "spread" : mk;
+      const bet = { market, teamId: mk === "total" ? null : $("tteam").value, side: mk === "total" || mk === "teamtotal" ? $("tside").value : null, line };
       if (mk !== "ml" && !Number.isFinite(bet.line)) return null;
       return bet;
     };
@@ -375,7 +377,7 @@ function mountTeamBets(data) {
       $("tstake").placeholder = sug ? `conseillée ${sug} €` : "1 €";
       return { bet, p, odds, e, sug };
     };
-    ["tmk", "tteam", "tspr", "tside", "tline", "todds"].forEach((id) => $(id).addEventListener("input", calc));
+    ["tmk", "tteam", "tside", "tline", "todds"].forEach((id) => $(id).addEventListener("input", calc));
     calc();
     $("tadd").addEventListener("click", () => {
       const c = calc();

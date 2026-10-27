@@ -1,7 +1,8 @@
 import { MARKETS, project, probLine, averages, shotProfile, valueOf, kelly, blend } from "./model.js";
 import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName, marketConsensus } from "./value.js";
 import { getDay, getGameData, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
-import { getGameOdds, cachedGameOdds, quota as oddsQuota, testKey, checkCoverage, SCAN_LEVELS } from "./odds.js";
+import { getTeamOdds, cachedTeamOdds, getGameOdds, cachedGameOdds, quota as oddsQuota, testKey, checkCoverage, SCAN_LEVELS } from "./odds.js";
+import { TEAM_MARKETS, projectGame, teamProb, teamLabel, evaluateTeam } from "./team.js";
 import { topValue, topMatchups, cachedTop, diagLines, noFrOdds } from "./picks.js";
 import { addBet as journalAdd, deleteBet, setStatus, updateBet, settleAll, exportBets, importBets, createCombo, splitCombo } from "./journal.js";
 
@@ -265,7 +266,7 @@ async function viewGame(token, id, teamSel) {
       <div class="mid"><div class="time">${g.state === "pre" ? parisTime(g.date) : `${g.away.score ?? ""} – ${g.home.score ?? ""}`}</div><div class="muted small">${parisDay(g.date)}</div></div>
       <div class="team right">${img(g.home.logo)}<div class="nm ell">${esc(g.home.short)}</div></div>
     </div>
-    ${g.state === "pre" ? `<div id="gameTop"></div>` : ""}
+    ${g.state === "pre" ? `<div id="gameTop"></div><div id="teamBets"></div>` : ""}
     <div class="seg">
       ${[g.away, g.home].map((x) => `<button class="${x.id === tid ? "on" : ""}" data-team="${x.id}">${img(x.logo)}${esc(x.abbr || x.short)}</button>`).join("")}
     </div>
@@ -275,6 +276,123 @@ async function viewGame(token, id, teamSel) {
     <div class="row wrap"><span class="muted small">Données : ${data.data.gamesTotal} matchs analysés${data.data.updatedAt ? `, mis à jour ${new Date(data.data.updatedAt).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}` : ""}</span></div>`;
   $app.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => { location.hash = `#/game/${g.id}/${b.dataset.team}`; }));
   mountTop("gameTop", `game-${g.id}`, [g], "Top 5 value du match");
+  mountTeamBets(data);
+}
+
+// ---------- Paris sur le match (vainqueur, handicap, totaux) ----------
+const teamState = { open: false };
+function mountTeamBets(data) {
+  const host = document.getElementById("teamBets");
+  if (!host) return;
+  const g = data.game, core = data.gd.core;
+  const proj = projectGame(core, g);
+  const fav = proj.margin >= 0 ? g.home : g.away;
+  const pFav = proj.margin >= 0 ? proj.pHome : 1 - proj.pHome;
+  const render = () => {
+    const odds = cachedTeamOdds(g.id);
+    const rows = odds?.available ? evaluateTeam(proj, g, odds.offers, { wModel: 0.5 }) : [];
+    const rowHtml = (r, i) => {
+      const t = tag(r);
+      return `<div class="pick row"><div class="grow"><div class="main">${esc(r.label)}</div>
+        <div class="small muted">${esc(r.bookLabel)} · proba ${pct(r.pFinal)}${r.pMarket != null ? ` (marché ${pct(r.pMarket)})` : ""} · cote juste ${f2(r.fair)}</div></div>
+        <div class="center"><div class="odds num">${f2(r.odds)}</div><span class="chip ${t.cls}">${sgnPct(r.ev)}</span><br><button class="btn sm" data-tbet="${i}" style="margin-top:4px">+ Journal</button></div></div>`;
+    };
+    const best = rows.filter((r) => r.ev > 0);
+    const rest = rows.filter((r) => r.ev <= 0);
+    host.innerHTML = `<details class="acc"${teamState.open ? " open" : ""}>
+      <summary><span class="acc-ico" style="background:var(--soft)">🏆</span><div class="grow"><b>Paris sur le match</b>
+        <div class="small muted">${esc(g.home.abbr)} ${Math.round(proj.ptsH)} – ${Math.round(proj.ptsA)} ${esc(g.away.abbr)} · ${esc(fav.abbr)} gagne à ${pct(pFav)}</div></div><span class="chev" aria-hidden="true"></span></summary>
+      <div class="acc-body">
+        <div class="chips">
+          <span class="chip">Écart projeté ${esc(fav.abbr)} −${Math.abs(proj.margin).toFixed(1)}</span>
+          <span class="chip">Total projeté ${proj.total.toFixed(1)}</span>
+          ${proj.market.margin != null ? `<span class="chip neutral">Marché : ${esc(g.details || "")}${g.total ? ` · ${g.total}` : ""}</span>` : ""}
+        </div>
+        <div class="small muted" style="margin:6px 2px 10px">Modèle (attaque, défense, rythme, domicile) pondéré à ${Math.round(proj.modelWeight * 100)} % face au marché, selon le nombre de matchs joués.</div>
+        ${odds?.available ? `${best.length ? `<h3>Value Winamax / Betclic</h3>${best.map((r) => rowHtml(r, rows.indexOf(r))).join("")}` : `<div class="note">Aucune cote Winamax/Betclic avec de la value sur ce match.</div>`}
+          ${rest.length ? `<details class="mini"><summary>Autres cotes (${rest.length})</summary>${rest.map((r) => rowHtml(r, rows.indexOf(r))).join("")}</details>` : ""}
+          <div class="row between acc-foot"><span class="small muted">Cotes ${new Date(odds.fetchedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}${odds.quota?.remaining ? ` · ${odds.quota.remaining} crédits restants` : ""}</span><button class="link" data-tscan="1">↻ Rafraîchir</button></div>`
+        : settings.oddsKey ? `<button class="btn primary scan-btn" data-tscan="0">📡 Scanner Vainqueur / Handicap / Total (≈3 crédits)</button>` : `<a class="btn scan-btn" href="#/settings">Ajouter ma clé de cotes pour scanner</a>`}
+        <div class="betbox">
+          <div class="row between"><b>Mon pari sur le match</b><span class="small muted">calcul instantané</span></div>
+          <div class="form" style="margin-top:8px">
+            <div><label>Type</label><select id="tmk">${Object.entries(TEAM_MARKETS).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></div>
+            <div data-tf="team"><label>Équipe</label><select id="tteam"><option value="${g.home.id}">${esc(g.home.abbr)}</option><option value="${g.away.id}">${esc(g.away.abbr)}</option></select></div>
+            <div data-tf="spr" hidden style="grid-column:1/-1"><label>Handicap</label><select id="tspr"><option value="-1">Gagne par + de X pts</option><option value="1">Gagne ou perd par − de X pts</option></select></div>
+            <div data-tf="side" hidden><label>Côté</label><select id="tside"><option value="over">Plus de</option><option value="under">Moins de</option></select></div>
+            <div data-tf="line" hidden><label id="tlinel">Ligne</label><input type="number" inputmode="decimal" step="0.5" id="tline"></div>
+            <div><label>Cote</label><input type="number" inputmode="decimal" step="0.01" id="todds" placeholder="1.85"></div>
+            <div><label>Bookmaker</label><select id="tbook"><option value="winamax_fr">Winamax</option><option value="betclic_fr">Betclic</option></select></div>
+            <div><label>Mise (€)</label><input type="number" inputmode="decimal" step="0.5" id="tstake" placeholder="conseillée"></div>
+          </div>
+          <div id="tres" class="small" style="margin-top:8px"></div>
+          <button class="btn primary scan-btn" id="tadd" style="margin-top:10px">+ Ajouter au journal</button>
+        </div>
+      </div></details>`;
+    const det = host.querySelector("details");
+    det.addEventListener("toggle", () => { teamState.open = det.open; });
+    host.querySelectorAll("[data-tscan]").forEach((b) => b.addEventListener("click", async () => {
+      b.disabled = true; b.textContent = "Scan…";
+      const r = await getTeamOdds(g, settings.oddsKey, { force: b.dataset.tscan === "1" });
+      if (!r.available) toast(r.reason === "event_not_found" ? "Match pas encore listé par la source" : r.error || "Cotes indisponibles");
+      teamState.open = true; render();
+    }));
+    host.querySelectorAll("[data-tbet]").forEach((b) => b.addEventListener("click", () => {
+      const r = rows[+b.dataset.tbet];
+      const stake = prompt(`Mise en € pour « ${r.label} » @ ${r.odds} ?`, String(Math.max(1, Math.round(r.kelly * settings.bankroll * 10) / 10)));
+      if (stake == null) return;
+      saveTeamBet({ ...r, stake: parseFloat(String(stake).replace(",", ".")) || 1 });
+    }));
+    // Formulaire manuel
+    const $ = (id) => document.getElementById(id);
+    const num = (id) => parseFloat(String($(id).value).replace(",", "."));
+    const sync = () => {
+      const mk = $("tmk").value;
+      host.querySelector('[data-tf="team"]').hidden = mk === "total";
+      host.querySelector('[data-tf="side"]').hidden = !(mk === "total" || mk === "teamtotal");
+      host.querySelector('[data-tf="line"]').hidden = mk === "ml";
+      host.querySelector('[data-tf="spr"]').hidden = mk !== "spread";
+      $("tlinel").textContent = mk === "spread" ? "X (écart en points)" : "Ligne";
+    };
+    const current = () => {
+      const mk = $("tmk").value;
+      const raw = num("tline");
+      const line = mk === "ml" ? null : mk === "spread" ? Math.abs(raw) * Number($("tspr").value) : raw;
+      const bet = { market: mk, teamId: mk === "total" ? null : $("tteam").value, side: mk === "total" || mk === "teamtotal" ? $("tside").value : null, line };
+      if (mk !== "ml" && !Number.isFinite(bet.line)) return null;
+      return bet;
+    };
+    const calc = () => {
+      sync();
+      const bet = current(), out = $("tres");
+      if (!bet) { out.textContent = ""; return null; }
+      const p = teamProb(proj, g, bet), odds = num("todds");
+      if (!(odds > 1)) { out.innerHTML = `${esc(teamLabel(bet, g))} · proba <b>${pct(p)}</b> · cote juste <b>${f2(1 / p)}</b>`; return { bet, p }; }
+      const e = p * odds - 1, k = kelly(p, odds), sug = Math.round(k * settings.bankroll * 10) / 10, t = tag({ ev: e, pFinal: p });
+      out.innerHTML = `${esc(teamLabel(bet, g))} · proba <b>${pct(p)}</b> · cote juste <b>${f2(1 / p)}</b> · <span class="chip ${t.cls}">${t.text} ${sgnPct(e)}</span> · mise conseillée <b>${eur(sug)}</b>`;
+      $("tstake").placeholder = sug ? `conseillée ${sug} €` : "1 €";
+      return { bet, p, odds, e, sug };
+    };
+    ["tmk", "tteam", "tspr", "tside", "tline", "todds"].forEach((id) => $(id).addEventListener("input", calc));
+    calc();
+    $("tadd").addEventListener("click", () => {
+      const c = calc();
+      if (!c || !c.odds) { toast("Renseigne la ligne et la cote"); return; }
+      saveTeamBet({ ...c.bet, odds: c.odds, book: $("tbook").value, pModel: c.p, pFinal: c.p, ev: c.e, stake: num("tstake") || c.sug || 1, label: teamLabel(c.bet, g) });
+    });
+  };
+  const saveTeamBet = (r) => {
+    try {
+      const teamId = r.teamId || g.home.id;
+      const team = teamId === g.home.id ? g.home : g.away;
+      journalAdd({ kind: "team", eventId: g.id, season: g.season, gameDate: g.dateKey, matchup: `${g.away.abbr} @ ${g.home.abbr}`,
+        player: r.market === "total" ? `${g.away.abbr} @ ${g.home.abbr}` : team.name, playerId: "team",
+        market: r.market, teamId, oppId: teamId === g.home.id ? g.away.id : g.home.id, side: r.side, line: r.line,
+        odds: r.odds, book: r.book, stake: r.stake, pModel: r.pModel, pFinal: r.pFinal, ev: r.ev, label: r.label || teamLabel(r, g) });
+      toast(`Ajouté au journal ✓ (${eur(r.stake)})`);
+    } catch (e) { toast(e.message); }
+  };
+  render();
 }
 
 // ---------- Joueur ----------
@@ -789,8 +907,9 @@ const dayShort = (k) => `${k.slice(6, 8)}/${k.slice(4, 6)}`;
 const initials = (name) => String(name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 const jState = { combine: false, sel: new Set() };
 const legIcon = (st) => ({ won: "✓", lost: "✗", push: "↺", void: "–", pending: "•" }[st] || "•");
-const legLine = (l) => `<div class="jleg ${l.status}"><span class="jleg-i">${legIcon(l.status)}</span><div class="grow ell"><b>${esc(l.player)}</b> · ${esc(MARKETS[l.market]?.short || l.market)} ${l.side === "under" ? "Moins" : "Plus"} ${l.line}${l.result != null ? ` <span class="muted">(${l.result})</span>` : ""}</div><span class="num">${f2(l.odds)}</span></div>`;
-const betTitle = (b) => `${esc(MARKETS[b.market]?.label || b.market)} · ${b.side === "under" ? "Moins de" : "Plus de"} ${b.line}`;
+const legLine = (l) => `<div class="jleg ${l.status}"><span class="jleg-i">${legIcon(l.status)}</span><div class="grow ell">${l.kind === "team" ? `<b>${esc(l.label)}</b>${l.resultText ? ` <span class="muted">(${l.resultText})</span>` : ""}` : `<b>${esc(l.player)}</b> · ${esc(MARKETS[l.market]?.short || l.market)} ${l.side === "under" ? "Moins" : "Plus"} ${l.line}${l.result != null ? ` <span class="muted">(${l.result})</span>` : ""}`}</div><span class="num">${f2(l.odds)}</span></div>`;
+const betTitle = (b) => b.kind === "team" ? esc(b.label) : betTitle0(b);
+const betTitle0 = (b) => `${esc(MARKETS[b.market]?.label || b.market)} · ${b.side === "under" ? "Moins de" : "Plus de"} ${b.line}`;
 
 // Courbe du profit cumulé (SVG fait main).
 function profitCurve(done) {
@@ -924,12 +1043,12 @@ function settledRow(b) {
     </div></details>`;
   }
   const unit = MARKETS[b.market]?.parts?.length === 1 ? ` ${MARKETS[b.market].short.toLowerCase()}` : "";
-  const res = b.result != null ? `<b>${b.result}${esc(unit)}</b> vs ${b.line}` : b.status === "void" ? "n'a pas joué" : "réglé à la main";
+  const res = b.kind === "team" ? (b.resultText ? `score <b>${b.resultText}</b>` : "réglé à la main") : b.result != null ? `<b>${b.result}${esc(unit)}</b> vs ${b.line}` : b.status === "void" ? "n'a pas joué" : "réglé à la main";
   const icon = { won: "✓", lost: "✗", push: "↺", void: "–" }[b.status] || "";
   return `<details class="jrow ${b.status}"><summary>
       <div class="jav st">${icon}</div>
       <div class="grow"><div class="jbet-name ell">${esc(b.player)}</div>
-        <div class="small ell">${esc(MARKETS[b.market]?.short || b.market)} ${b.side === "under" ? "Moins" : "Plus"} ${b.line} · <span class="muted">${res}</span></div></div>
+        <div class="small ell">${b.kind === "team" ? esc(b.label) : `${esc(MARKETS[b.market]?.short || b.market)} ${b.side === "under" ? "Moins" : "Plus"} ${b.line}`} · <span class="muted">${res}</span></div></div>
       <div class="jrow-r"><b class="num ${p > 0 ? "up" : p < 0 ? "down" : "muted"}">${b.status === "push" || b.status === "void" ? J_LABEL[b.status] : sEur(p)}</b><span class="small muted num">${eur(b.stake)} @ ${f2(b.odds)}</span></div>
     </summary>
     <div class="jrow-body">
@@ -992,7 +1111,7 @@ async function viewJournal(token, keep) {
       <div class="row between"><h2 style="margin:0">Évolution du profit</h2>${settled.length ? `<span class="chip ${profit > 0 ? "good" : profit < 0 ? "bad" : ""} num">${sEur(profit)}</span>` : ""}</div>
       ${profitCurve(done)}
       ${done.length ? `<div class="jsplit-h"><span class="small muted">Profit par</span><div class="jmini" role="tablist"><button class="on" data-split="market">Marché</button><button data-split="book">Bookmaker</button></div></div>
-      <div data-split-p="market">${profitBars(done, (b) => b.market, (k) => MARKETS[k]?.label || (k === "combo" ? "Combinés" : k))}</div>
+      <div data-split-p="market">${profitBars(done, (b) => b.market, (k) => MARKETS[k]?.label || TEAM_MARKETS[k] || (k === "combo" ? "Combinés" : k))}</div>
       <div data-split-p="book" hidden>${profitBars(done, (b) => b.book, (k) => BOOK_LABEL[k] || (k === "mixed" ? "Plusieurs books" : k))}</div>` : ""}
     </div>
     <div class="jtabs" role="tablist">

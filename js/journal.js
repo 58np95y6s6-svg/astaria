@@ -1,6 +1,7 @@
 // Journal des paris, stocké sur l'appareil (localStorage) + export / import.
 // Règlement automatique à partir des feuilles de match publiées par GitHub Actions.
-import { getCore, playerLogs } from "./data.js";
+import { getCore, playerLogs, getTeamLogs } from "./data.js";
+import { gradeTeam } from "./team.js";
 import { valueOf } from "./model.js";
 import { normName } from "./value.js";
 import { seasonForDate, shiftDateKey } from "./factors.js";
@@ -22,6 +23,11 @@ export function addBet(b) {
     line: Number(b.line), odds: Number(b.odds), book: b.book || "manual", stake: Number(b.stake) || 1,
     pModel: b.pModel ?? null, pFinal: b.pFinal ?? null, ev: b.ev ?? null, mean: b.mean ?? null,
   };
+  if (b.kind === "team") {
+    // Pari équipe : vainqueur, handicap, total du match, total d'une équipe.
+    Object.assign(bet, { kind: "team", teamId: b.teamId ?? null, oppId: b.oppId ?? null, label: String(b.label || ""),
+      side: b.side ?? null, line: b.line == null ? null : Number(b.line), playerId: "team" });
+  }
   const bets = loadBets();
   bets.unshift(bet);
   if (!save(bets)) throw new Error("Stockage du téléphone indisponible (navigation privée ?)");
@@ -48,6 +54,10 @@ export function updateBet(id, patch) {
   if (b.type === "combo") { save(bets); return; }
   if (patch.side === "over" || patch.side === "under") b.side = patch.side;
   if (patch.book) b.book = patch.book;
+  if (b.kind === "team") {
+    if (b.scoreT != null && !b.manual) b.status = gradeTeam(b, b.scoreT, b.scoreO);
+    save(bets); return;
+  }
   // Si le pari était réglé automatiquement, on recalcule son statut avec la nouvelle ligne.
   if (b.result != null && !b.manual && b.status !== "void") b.status = b.result === b.line ? "push" : (b.side === "over" ? b.result > b.line : b.result < b.line) ? "won" : "lost";
   save(bets);
@@ -84,8 +94,25 @@ async function settleFree(b) {
   return false;
 }
 
+// Pari équipe : score final reconstitué à partir des feuilles de match des deux équipes.
+async function settleTeam(b) {
+  const core = await getCore(b.season);
+  if (!core?.processed?.[b.eventId]) return false;
+  const score = async (tid) => Object.values((await getTeamLogs(b.season, tid)).players || {}).flat()
+    .filter((l) => l.e === b.eventId).reduce((t, l) => t + l.pts, 0);
+  const [sT, sO] = await Promise.all([score(b.teamId), score(b.oppId)]);
+  if (!sT || !sO) return false;
+  b.scoreT = sT; b.scoreO = sO;
+  b.resultText = `${sT}-${sO}`;
+  b.status = gradeTeam(b, sT, sO);
+  b.settledAt = new Date().toISOString();
+  b.auto = true;
+  return true;
+}
+
 // Règle un pari simple ou une sélection de combiné (même forme). Renvoie true si quelque chose a changé.
 async function settleOne(b) {
+  if (b.kind === "team") return settleTeam(b);
   if (b.eventId === "manual" || b.playerId === "manual") return settleFree(b);
   const core = await getCore(b.season);
   if (!core?.processed?.[b.eventId]) return false; // match pas encore intégré
@@ -127,7 +154,7 @@ export async function settleAll() {
   return bets;
 }
 
-const LEG_FIELDS = ["player", "playerId", "eventId", "season", "gameDate", "matchup", "market", "side", "line", "odds", "book", "pFinal", "pModel", "status", "result", "settledAt"];
+const LEG_FIELDS = ["kind", "teamId", "oppId", "label", "resultText", "scoreT", "scoreO", "player", "playerId", "eventId", "season", "gameDate", "matchup", "market", "side", "line", "odds", "book", "pFinal", "pModel", "status", "result", "settledAt"];
 
 // Regroupe des paris simples en cours en un combiné (cote = produit des cotes).
 export function createCombo(ids, stake) {

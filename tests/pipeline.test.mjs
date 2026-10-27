@@ -105,4 +105,18 @@ test("pipeline complet", async () => {
   j.splitCombo(c4.id);
   const b4 = j.loadBets();
   assert.ok(!b4.some((b) => b.id === c4.id) && b4.filter((b) => b.player === "X" || b.player === "Y").length === 2);
+
+  // Paris équipe : réglés avec le score final (9002 : NYK reçoit BOS)
+  const tb = j.addBet({ kind: "team", eventId: "9002", season: 2027, gameDate: "20261024", matchup: "BOS @ NYK", player: "New York Knicks", playerId: "team",
+    market: "ml", teamId: "3", oppId: "1", odds: 1.9, label: "NYK vainqueur" });
+  const tt = j.addBet({ kind: "team", eventId: "9002", season: 2027, gameDate: "20261024", matchup: "BOS @ NYK", player: "BOS @ NYK", playerId: "team",
+    market: "total", teamId: "3", oppId: "1", side: "over", line: 0.5, odds: 1.9, label: "Total match Plus de 0.5" });
+  const b5 = await j.settleAll();
+  const s1 = b5.find((b) => b.id === tb.id), s2 = b5.find((b) => b.id === tt.id);
+  assert.match(s1.resultText, /^\d+-\d+$/);
+  assert.equal(s1.status, s1.scoreT > s1.scoreO ? "won" : s1.scoreT < s1.scoreO ? "lost" : "push");
+  assert.equal(s2.status, "won");
+  const T = await import("../js/team.js");
+  assert.equal(T.gradeTeam({ market: "spread", line: 5.5 }, 100, 104), "won", "+5.5 : perd de 4 → gagné");
+  assert.equal(T.gradeTeam({ market: "spread", line: -5.5 }, 104, 100), "lost", "−5.5 : gagne de 4 → perdu");
 });

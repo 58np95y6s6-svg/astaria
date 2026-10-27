@@ -167,3 +167,41 @@ export async function testKey(apiKey) {
   if (remaining) ls.set("astaria-odds-quota", { remaining });
   return { ok: true, msg: `Clé valide ✓${remaining ? ` · ${remaining} crédits restants` : ""}${nba ? " · NBA disponible" : ""}` };
 }
+
+// ---------- Cotes équipe (vainqueur, handicap, total) : ≈3 crédits par match ----------
+// Winamax et Betclic les publient sur la source ; Pinnacle / Betfair / books US servent de référence.
+const TEAM_BOOKS = "winamax_fr,betclic_fr,pinnacle,betfair_ex_eu,draftkings,fanduel";
+
+export function cachedTeamOdds(gameId) {
+  const c = ls.get(`ibibet-team-odds-${gameId}`);
+  return c && Date.now() - c.fetchedAtMs < TTL ? { ...c, cached: true } : null;
+}
+
+export async function getTeamOdds(game, apiKey, { force = false } = {}) {
+  if (!apiKey) return { available: false, reason: "no_key" };
+  const ck = `ibibet-team-odds-${game.id}`;
+  const cached = ls.get(ck);
+  if (cached && !force && Date.now() - cached.fetchedAtMs < TTL) return { ...cached, cached: true };
+  try {
+    const ev = await findEvent(apiKey, game);
+    if (!ev) return { available: false, reason: "event_not_found" };
+    const { body, quota } = await call(apiKey, `/events/${ev.id}/odds`, { markets: "h2h,spreads,totals", oddsFormat: "decimal", bookmakers: TEAM_BOOKS });
+    const teamOf = (name) => (nickname(name) === nickname(game.home.name) ? game.home.id : nickname(name) === nickname(game.away.name) ? game.away.id : null);
+    const offers = [];
+    for (const bm of body?.bookmakers || []) {
+      for (const m of bm.markets || []) {
+        for (const o of m.outcomes || []) {
+          if (m.key === "h2h") offers.push({ book: bm.key, market: "ml", teamId: teamOf(o.name), odds: o.price });
+          else if (m.key === "spreads") offers.push({ book: bm.key, market: "spread", teamId: teamOf(o.name), line: o.point, odds: o.price });
+          else if (m.key === "totals") offers.push({ book: bm.key, market: "total", side: /under/i.test(o.name) ? "under" : "over", line: o.point, odds: o.price });
+        }
+      }
+    }
+    const out = { available: true, fetchedAt: new Date().toISOString(), fetchedAtMs: Date.now(), quota, offers: offers.filter((o) => o.market === "total" || o.teamId) };
+    ls.set(ck, out);
+    return out;
+  } catch (e) {
+    const msg = e.status === 401 ? "clé The Odds API invalide" : e.status === 429 ? "quota de crédits épuisé" : e.message;
+    return { available: false, reason: "error", error: msg };
+  }
+}

@@ -520,10 +520,33 @@ function buildAIPrompt(d, proj, st, picks) {
   const m = proj.minutes;
   return `Tu es un analyste expert en paris NBA (props joueurs). Analyse le match à venir de ${d.player.name} et propose les meilleurs paris chez Winamax ou Betclic.
 
-FORMAT DE RÉPONSE OBLIGATOIRE (en français, concis) :
-1. 🎯 PROPOSITIONS — en premier, sous forme de liste : pour chaque pari conseillé (1 à 3 max) : marché, Over/Under, ligne, bookmaker et cote, probabilité estimée, niveau de confiance (/5), mise suggérée en % de bankroll (max 3 %). Puis 1 à 2 paris À ÉVITER.
-2. 📋 EXPLICATIONS — seulement ensuite : scénario du match (rythme, écart, temps de jeu), matchup défensif, forme récente, risques (blessure, blowout, rotation, back-to-back).
-Si aucune cote n'est fournie, propose les lignes à viser (seuil Over/Under et cote minimale intéressante). Vérifie si possible les dernières infos (blessures, compo) avant de conclure. N'invente aucune donnée.
+RÉPONDS EXACTEMENT AVEC CE GABARIT (en français, lecture sur téléphone) :
+- Aucune phrase d'introduction ni de conclusion, aucun paragraphe.
+- Chaque ligne fait au plus ~12 mots. Remplace ce qui est entre <>.
+- 1 à 3 paris conseillés maximum, classés du meilleur au moins bon.
+- Si aucune cote n'est fournie, la « cote » = cote minimale à exiger (≥).
+
+**🏆 VERDICT :** <le pari n°1 en une ligne>
+
+**🎯 PARIS CONSEILLÉS**
+
+**1. <Marché> <Over/Under> <ligne>** · <Winamax|Betclic> @ <cote>
+📊 <proba> % · <⭐ de 1 à 5> · mise <x> %
+💡 <raison principale>
+
+**2. …** (même format)
+
+**⛔ À ÉVITER**
+- <pari> — <raison>
+
+**📋 EN BREF**
+- ⏱️ Minutes : <…>
+- 🛡️ Matchup : <…>
+- 📈 Forme : <…>
+- ⚠️ Risque n°1 : <…>
+- 🔎 Info récente : <uniquement si une news (blessure, compo) change l'analyse, sinon supprime la ligne>
+
+Vérifie si possible les dernières infos (blessures, compo). N'invente aucune donnée.
 
 MATCH : ${d.teamName} ${d.home ? "reçoit" : "à"} ${d.oppName} — ${parisDay(g.date)} ${parisTime(g.date)} (heure de Paris)
 Écart prévu : ${d.spread == null ? "inconnu" : `${d.spread > 0 ? "+" : ""}${d.spread} pour ${d.teamName}`} · Total : ${g.total ?? "inconnu"}

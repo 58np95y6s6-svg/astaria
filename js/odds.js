@@ -19,8 +19,9 @@ export const ALT_MARKET_MAP = {
   player_points_assists_alternate: "pa", player_rebounds_assists_alternate: "ra",
 };
 const ALL_MARKETS = { ...MARKET_MAP, ...ALT_MARKET_MAP };
-// Winamax et Betclic sont les seuls affichés ; Pinnacle et Betfair servent de référence invisible (même coût).
-const BOOKS = "winamax_fr,betclic_fr,pinnacle,betfair_ex_eu";
+// Winamax et Betclic sont les seuls affichés. Les books US (qui publient les cotes joueurs NBA sur la source)
+// et Pinnacle/Betfair servent de référence invisible. ≤ 10 bookmakers = même coût qu'une seule région.
+const BOOKS = "winamax_fr,betclic_fr,draftkings,fanduel,betmgm,williamhill_us,betrivers,pinnacle,betfair_ex_eu";
 const TTL = 10 * 60e3;
 
 const ls = {
@@ -142,11 +143,13 @@ export async function checkCoverage(apiKey) {
   if (!ev) return { ok: false, msg: "Aucun match NBA à venir pour tester." };
   const { body, quota } = await call(apiKey, `/events/${ev.id}/odds`, { markets: "player_points", oddsFormat: "decimal", bookmakers: BOOKS });
   const n = (k) => (body?.bookmakers || []).find((b) => b.key === k)?.markets?.[0]?.outcomes?.length || 0;
-  const w = n("winamax_fr"), bc = n("betclic_fr"), pin = n("pinnacle") + n("betfair_ex_eu");
+  const w = n("winamax_fr"), bc = n("betclic_fr");
+  const refs = (body?.bookmakers || []).filter((b) => !["winamax_fr", "betclic_fr"].includes(b.key) && b.markets?.[0]?.outcomes?.length);
+  const pin = refs.reduce((t, b) => t + b.markets[0].outcomes.length, 0);
   const match = `${ev.away_team} @ ${ev.home_team}`;
   let verdict;
   if (w || bc) verdict = "✅ Winamax/Betclic disponibles : le scan fonctionnera.";
-  else if (pin) verdict = "❌ Pas de cotes joueurs Winamax/Betclic via la source (la référence Pinnacle/Betfair, elle, répond). Utilise la saisie manuelle ou les lignes à viser.";
+  else if (pin) verdict = `❌ Pas de cotes joueurs Winamax/Betclic via la source. Les références (${refs.map((b) => b.title).join(", ")}) répondent : le scan te donnera les lignes à viser avec la cote minimale à exiger chez Winamax.`;
   else verdict = "⏳ Aucune cote joueurs publiée pour l'instant sur ce match : réessaie plus près du match.";
   return { ok: true, msg: `${match} — Winamax ${w} · Betclic ${bc} · réf. ${pin}. ${verdict}${quota.remaining ? ` (${quota.remaining} crédits restants)` : ""}` };
 }

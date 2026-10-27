@@ -133,9 +133,9 @@ function scanResultsHTML(res, limit = 5) {
   let html = "";
   if (pos.length) html += pos.slice(0, limit).map(topRow).join("");
   else if (noFrOdds(res) && res.targets?.length) {
-    html += `<div class="note warn" style="margin:4px 0 8px">Winamax et Betclic n'ont pas encore publié de cotes joueurs. Voici les <b>lignes à viser</b> : vérifie la cote sur ton appli, et prends le pari seulement si elle atteint la cote minimale.</div>`
+    html += `<div class="note warn" style="margin:4px 0 8px">La source ne fournit pas les cotes joueurs Winamax/Betclic. Voici les <b>lignes à viser</b>, calculées avec les bookmakers de référence : vérifie la cote sur Winamax et prends le pari seulement si elle atteint la cote minimale.</div>`
       + res.targets.slice(0, limit).map(targetRow).join("");
-  } else if (noFrOdds(res)) html += `<div class="empty">Winamax et Betclic n'ont pas encore publié de cotes joueurs pour ces matchs. Réessaie plus tard dans la journée.</div>`;
+  } else if (noFrOdds(res)) html += `<div class="empty">Aucune cote joueurs reçue pour ces matchs (ni Winamax/Betclic, ni référence). Réessaie plus près du match.</div>`;
   else html += `<div class="empty">Cotes Winamax/Betclic reçues, mais aucune n'a de value pour l'instant.</div>`;
   const dl = diagLines(res);
   if (dl.length || res.errors?.length) html += `<details class="mini"><summary>Détail du scan</summary><div class="small muted">${[...dl, ...(res.errors || [])].map(esc).join("<br>")}</div></details>`;
@@ -146,7 +146,7 @@ function topSummary(res) {
   if (!res || res.mode !== "odds") return "Meilleurs matchups (gratuit) · scan des cotes à la demande";
   const pos = res.picks.filter((p) => p.ev > 0);
   if (pos.length) return `${Math.min(5, pos.length)} paris · meilleur ${sgnPct(pos[0].ev)} · ${ago(res.at)}`;
-  if (noFrOdds(res)) return `Cotes Winamax/Betclic pas encore publiées${res.targets?.length ? ` · ${Math.min(5, res.targets.length)} lignes à viser` : ""} · ${ago(res.at)}`;
+  if (noFrOdds(res)) return `${res.targets?.length ? `${Math.min(5, res.targets.length)} lignes à viser` : "Aucune ligne à viser"} · ${ago(res.at)}`;
   return `Aucune value pour l'instant · ${ago(res.at)}`;
 }
 
@@ -825,7 +825,7 @@ async function viewSettings(token) {
       <div class="small" id="covr" style="margin-top:6px"></div>
     </div>
     <div class="note">Clé gratuite sur <a href="https://the-odds-api.com/#get-access" target="_blank" rel="noopener" style="text-decoration:underline">the-odds-api.com</a> (500 crédits/mois). Elle reste sur cet appareil. Sans clé, tu peux saisir tes cotes à la main.</div>
-    <div class="note">Le poids du modèle règle la confiance accordée à nos projections face au consensus des bookmakers (Pinnacle et Betfair servent de référence, sans être affichés). 60 % est un bon départ ; ajuste selon la fiabilité mesurée dans le Journal.</div>
+    <div class="note">Le poids du modèle règle la confiance accordée à nos projections face au consensus des bookmakers (DraftKings, FanDuel, Pinnacle… servent de référence, sans être affichés). 60 % est un bon départ ; ajuste selon la fiabilité mesurée dans le Journal.</div>
     <div class="card" id="dstatus">${loader("État des données…")}</div>`;
   document.getElementById("bk").addEventListener("change", (e) => { settings.bankroll = Math.max(1, +e.target.value || 100); saveSettings(); toast("Enregistré"); });
   const wm = document.getElementById("wm");

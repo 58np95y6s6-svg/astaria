@@ -37,6 +37,19 @@ export function setStatus(id, status) {
   save(bets);
 }
 
+// Modification d'un pari (mise en €, cote, ligne, côté, bookmaker).
+export function updateBet(id, patch) {
+  const bets = loadBets();
+  const b = bets.find((x) => x.id === id);
+  if (!b) return;
+  for (const k of ["stake", "odds", "line"]) if (Number.isFinite(patch[k]) && patch[k] > 0) b[k] = patch[k];
+  if (patch.side === "over" || patch.side === "under") b.side = patch.side;
+  if (patch.book) b.book = patch.book;
+  // Si le pari était réglé automatiquement, on recalcule son statut avec la nouvelle ligne.
+  if (b.result != null && !b.manual && b.status !== "void") b.status = b.result === b.line ? "push" : (b.side === "over" ? b.result > b.line : b.result < b.line) ? "won" : "lost";
+  save(bets);
+}
+
 export function deleteBet(id) { save(loadBets().filter((b) => b.id !== id)); }
 
 export async function settleAll() {

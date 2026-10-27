@@ -211,3 +211,5 @@ img.av, .ph.av { width: 42px; height: 42px; border-radius: 14px; object-fit: cov
 .betbox input, .betbox select { background: var(--card); }
 .settle { gap: 6px; flex-wrap: wrap; padding: 0 0 12px; }
 .settle + .pick, .pick:has(+ .settle) { border-bottom: 0; }
+.editbox { background: var(--soft); border-radius: 14px; padding: 12px; margin: 0 0 12px; }
+.editbox input, .editbox select { background: var(--card); }

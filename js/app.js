@@ -1,9 +1,11 @@
 import { MARKETS, project, probLine, averages, shotProfile, valueOf, kelly, blend } from "./model.js";
 import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName, marketConsensus } from "./value.js";
-import { getDay, getGameData, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
+import { getDay, getGameData, getCore, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
+import { parseSlip, ocrImage } from "./slip.js";
+import { seasonForDate } from "./factors.js";
 import { getTeamOdds, cachedTeamOdds, getGameOdds, cachedGameOdds, quota as oddsQuota, testKey, checkCoverage, SCAN_LEVELS } from "./odds.js";
 import { TEAM_MARKETS, projectGame, teamProb, teamLabel, evaluateTeam } from "./team.js";
-import { topValue, topMatchups, cachedTop, diagLines, noFrOdds } from "./picks.js";
+import { topValue, topMatchups, cachedTop, diagLines, noFrOdds, getProjections, statFromProj } from "./picks.js";
 import { addBet as journalAdd, deleteBet, setStatus, updateBet, settleAll, exportBets, importBets, createCombo, splitCombo } from "./journal.js";
 
 // ---------- utilitaires ----------
@@ -1066,6 +1068,168 @@ function settledRow(b) {
     </div></details>`;
 }
 
+// ---------- Import d'un ticket (capture Betclic / Winamax) ----------
+const slipState = { legs: null, book: null, total: null, status: "", combo: true, stake: "" };
+const SLIP_TYPES = [["ml", "Vainqueur"], ["spreadPlus", "Gagne ou perd de X pts ou −"], ["spreadMinus", "Gagne de X pts ou +"], ["lead", "Gagne ou possède une avance de X pts"], ["total", "Total du match"]];
+
+// Relie chaque sélection lue à un match (hier → demain) et calcule sa probabilité.
+async function resolveSlip(parsed) {
+  const today = etKey();
+  const games = (await Promise.all([shiftKey(today, -1), today, shiftKey(today, 1)].map((k) => getDay(k).catch(() => null))))
+    .flatMap((d) => d?.games || []).sort((x, y) => (x.state === "pre") === (y.state === "pre") ? 0 : x.state === "pre" ? -1 : 1);
+  const core = await getCore(seasonForDate(new Date())).catch(() => null);
+  for (const leg of parsed.legs) {
+    if (leg.kind === "team") {
+      const nick = (leg.teamNick || "").toLowerCase();
+      const g = nick ? games.find((x) => x.home.name.toLowerCase().includes(nick) || x.away.name.toLowerCase().includes(nick)) : null;
+      leg.game = g || null;
+      if (g) {
+        const isHome = g.home.name.toLowerCase().includes(nick);
+        leg.teamId = isHome ? g.home.id : g.away.id;
+        leg.oppId = isHome ? g.away.id : g.home.id;
+        leg.teamAbbr = isHome ? g.home.abbr : g.away.abbr;
+        if (core) leg.tproj = projectGame(core, g);
+      }
+    } else {
+      const g = games.find((x) => x.home.id === leg.playerTeamId || x.away.id === leg.playerTeamId);
+      leg.game = g || null;
+      if (g) leg.pproj = (await getProjections(g.id).catch(() => null))?.players?.[leg.playerId] || null;
+    }
+    leg.on = true;
+    computeSlipLeg(leg);
+  }
+  return parsed;
+}
+
+// Ligne, libellé et probabilité d'une sélection (recalculés à chaque modification).
+function computeSlipLeg(leg) {
+  leg.p = null;
+  if (leg.kind === "team") {
+    const x = Number(leg.x);
+    const line = leg.type === "ml" ? null : leg.type === "spreadPlus" ? (Number.isInteger(x) ? x + 0.5 : x) : leg.type === "spreadMinus" ? -(Number.isInteger(x) ? x - 0.5 : x) : x;
+    leg.market = leg.type === "spreadPlus" || leg.type === "spreadMinus" ? "spread" : leg.type;
+    leg.line = line;
+    const bet = { market: leg.market, teamId: leg.teamId, side: leg.type === "total" ? leg.side || "over" : null, line };
+    leg.label = leg.game ? teamLabel({ ...bet }, leg.game) : `${leg.team || "?"} · ${SLIP_TYPES.find((t) => t[0] === leg.type)?.[1] || ""}`;
+    leg.ok = !!leg.game && (leg.type === "ml" || Number.isFinite(x)) && leg.odds > 1;
+    if (leg.ok && leg.tproj) leg.p = teamProb(leg.tproj, leg.game, bet);
+  } else {
+    leg.label = `${leg.player} · ${MARKETS[leg.market]?.label || "?"} ${leg.side === "under" ? "Moins" : "Plus"} de ${leg.line ?? "?"}`;
+    leg.ok = !!leg.game && !!MARKETS[leg.market] && Number.isFinite(Number(leg.line)) && leg.odds > 1;
+    if (leg.ok && leg.pproj?.m?.[leg.market]) leg.p = probLine(statFromProj(leg.pproj, leg.market).dist, Number(leg.line))[leg.side || "over"];
+  }
+  return leg;
+}
+
+function slipLegHTML(l, i) {
+  const ev = l.p != null && l.odds > 1 ? l.p * l.odds - 1 : null;
+  const t = ev != null ? tag({ ev, pFinal: l.p }) : null;
+  const typeSel = l.kind === "team" ? `<select data-sl="${i}" data-k="type">${SLIP_TYPES.map(([k, n]) => `<option value="${k}"${l.type === k ? " selected" : ""}>${n}</option>`).join("")}</select>`
+    : `<select data-sl="${i}" data-k="market">${Object.entries(MARKETS).map(([k, m]) => `<option value="${k}"${l.market === k ? " selected" : ""}>${m.label}</option>`).join("")}</select>`;
+  const lineField = l.kind === "team" ? (l.type === "ml" ? "" : `<input type="number" inputmode="decimal" step="0.5" data-sl="${i}" data-k="x" value="${l.x ?? ""}" placeholder="X" class="${l.x == null ? "miss" : ""}">`)
+    : `<select data-sl="${i}" data-k="side"><option value="over"${l.side !== "under" ? " selected" : ""}>Plus de</option><option value="under"${l.side === "under" ? " selected" : ""}>Moins de</option></select><input type="number" inputmode="decimal" step="0.5" data-sl="${i}" data-k="line" value="${l.line ?? ""}" placeholder="ligne" class="${l.line == null ? "miss" : ""}">`;
+  return `<div class="slipleg${l.on ? "" : " off"}">
+    <label class="row" style="gap:8px;margin:0;color:inherit"><input type="checkbox" data-sl="${i}" data-k="on"${l.on ? " checked" : ""}><b class="grow">${esc(l.kind === "team" ? (l.team || "Équipe ?") : l.player)}</b><span class="small muted">${l.game ? esc(`${l.game.away.abbr} @ ${l.game.home.abbr}`) : "match introuvable"}</span></label>
+    <div class="sliprow">${typeSel}${lineField}<input type="number" inputmode="decimal" step="0.01" data-sl="${i}" data-k="odds" value="${l.odds ?? ""}" placeholder="cote" class="odds-in${l.odds ? "" : " miss"}"></div>
+    <div class="small" data-slres="${i}">${esc(l.label)}${l.p != null ? ` · proba <b>${pct(l.p)}</b> · cote juste ${f2(1 / l.p)} · <span class="chip ${t.cls}">${sgnPct(ev)}</span>` : ""}${!l.ok ? ` · <span class="down">à compléter</span>` : ""}</div>
+  </div>`;
+}
+
+function slipFooterHTML() {
+  const on = slipState.legs.filter((l) => l.on);
+  const prod = on.reduce((t, l) => t * (l.odds || 1), 1);
+  const pAll = on.length && on.every((l) => l.p != null) ? on.reduce((t, l) => t * l.p, 1) : null;
+  const odds = slipState.combo && on.length > 1 ? (slipState.total && Math.abs(slipState.total - prod) < 0.15 ? slipState.total : Math.round(prod * 100) / 100) : null;
+  return `<div class="row wrap" style="gap:10px;margin-top:10px">
+      <select id="slipBook" style="flex:1"><option value="betclic_fr"${slipState.book === "betclic_fr" ? " selected" : ""}>Betclic</option><option value="winamax_fr"${slipState.book === "winamax_fr" ? " selected" : ""}>Winamax</option></select>
+      <input type="number" inputmode="decimal" step="0.5" id="slipStake" placeholder="Mise (€)" value="${esc(slipState.stake)}" style="flex:1">
+    </div>
+    ${on.length > 1 ? `<label class="row" style="gap:8px;margin:10px 0 0;color:inherit"><input type="checkbox" id="slipCombo"${slipState.combo ? " checked" : ""}> En combiné ${odds ? `· cote <b>${f2(odds)}</b>` : ""}${pAll != null && slipState.combo ? ` · proba ${pct(pAll)} · value <b class="${pAll * odds - 1 >= 0 ? "up" : "down"}">${sgnPct(pAll * odds - 1)}</b>` : ""}</label>` : ""}
+    <button class="btn primary scan-btn" id="slipAdd" style="margin-top:10px">+ Ajouter ${on.length} pari${on.length > 1 ? "s" : ""} au journal</button>`;
+}
+
+function slipBodyHTML() {
+  return `<div class="row wrap" style="gap:8px">
+      <label class="btn primary grow" style="margin:0;color:#fff;font-size:15px">📷 Choisir une capture<input type="file" accept="image/*" id="slipFile" hidden></label>
+    </div>
+    <details class="mini"><summary>ou coller le texte du ticket</summary>
+      <textarea id="slipText" rows="5" placeholder="Sur iPhone : ouvre la capture dans Photos, appui long sur le texte → Tout sélectionner → Copier, puis colle ici."></textarea>
+      <button class="btn sm" id="slipParse" style="margin-top:6px">Analyser le texte</button></details>
+    <div class="small muted" id="slipStatus" style="margin-top:8px">${esc(slipState.status)}</div>
+    ${slipState.legs ? (slipState.legs.length ? `<div id="slipLegs">${slipState.legs.map(slipLegHTML).join("")}</div><div id="slipFoot">${slipFooterHTML()}</div>
+      <button class="link small" id="slipReset" style="margin-top:8px">Effacer</button>` : `<div class="note warn">Aucune sélection reconnue. Essaie une capture plus nette ou colle le texte.</div>`) : ""}`;
+}
+
+function wireSlip(again) {
+  const body = document.getElementById("slipBody");
+  if (!body) return;
+  const redraw = () => { body.innerHTML = slipBodyHTML(); wireSlip(again); };
+  const run = async (getText) => {
+    try {
+      slipState.status = "Lecture…"; slipState.legs = null; redraw();
+      const text = await getText((m) => { const s = document.getElementById("slipStatus"); if (s) s.textContent = m; });
+      const core = await getCore(seasonForDate(new Date())).catch(() => null);
+      const parsed = parseSlip(text, { players: core?.players });
+      slipState.status = "Analyse des matchs…"; redraw();
+      await resolveSlip(parsed);
+      Object.assign(slipState, { legs: parsed.legs, book: parsed.book || "betclic_fr", total: parsed.totalOdds, combo: parsed.legs.length > 1, stake: parsed.stake ?? "",
+        status: parsed.legs.length ? `${parsed.legs.length} sélection${parsed.legs.length > 1 ? "s" : ""} trouvée${parsed.legs.length > 1 ? "s" : ""}${parsed.book ? ` · ${BOOK_LABEL[parsed.book]}` : ""}${parsed.totalOdds ? ` · cote totale ${f2(parsed.totalOdds)}` : ""}. Vérifie avant d'ajouter.` : "" });
+      redraw();
+    } catch (e) { slipState.status = `Erreur : ${e.message}`; redraw(); }
+  };
+  document.getElementById("slipFile")?.addEventListener("change", (e) => { const f = e.target.files[0]; if (f) run((cb) => ocrImage(f, cb)); });
+  document.getElementById("slipParse")?.addEventListener("click", () => { const t = document.getElementById("slipText").value; if (t.trim()) run(async () => t); });
+  document.getElementById("slipReset")?.addEventListener("click", () => { Object.assign(slipState, { legs: null, status: "" }); redraw(); });
+  body.querySelectorAll("[data-sl]").forEach((el) => el.addEventListener(el.type === "checkbox" ? "change" : "input", () => {
+    const leg = slipState.legs[+el.dataset.sl], k = el.dataset.k;
+    if (k === "on") leg.on = el.checked;
+    else if (["x", "odds", "line"].includes(k)) leg[k] = el.value === "" ? null : parseFloat(String(el.value).replace(",", "."));
+    else leg[k] = el.value;
+    computeSlipLeg(leg);
+    if (k === "type" || k === "market" || k === "on") { redraw(); return; }
+    const r = body.querySelector(`[data-slres="${el.dataset.sl}"]`);
+    if (r) r.outerHTML = (() => { const tmp = document.createElement("div"); tmp.innerHTML = slipLegHTML(leg, +el.dataset.sl); return tmp.querySelector("[data-slres]").outerHTML; })();
+    const foot = document.getElementById("slipFoot");
+    if (foot) { foot.innerHTML = slipFooterHTML(); wireSlipFoot(again); }
+  }));
+  wireSlipFoot(again);
+}
+
+function wireSlipFoot(again) {
+  document.getElementById("slipBook")?.addEventListener("change", (e) => { slipState.book = e.target.value; });
+  document.getElementById("slipStake")?.addEventListener("input", (e) => { slipState.stake = e.target.value; });
+  document.getElementById("slipCombo")?.addEventListener("change", (e) => {
+    slipState.combo = e.target.checked;
+    const foot = document.getElementById("slipFoot"); foot.innerHTML = slipFooterHTML(); wireSlipFoot(again);
+  });
+  document.getElementById("slipAdd")?.addEventListener("click", () => {
+    const on = slipState.legs.filter((l) => l.on);
+    const bad = on.filter((l) => !l.ok);
+    if (!on.length) { toast("Aucune sélection cochée"); return; }
+    if (bad.length) { toast("Complète les sélections en rouge (ou décoche-les)"); return; }
+    const stake = parseFloat(String(slipState.stake).replace(",", ".")) || 1;
+    const combo = slipState.combo && on.length > 1;
+    try {
+      const ids = on.map((l) => {
+        const g = l.game;
+        const base = { eventId: g.id, season: seasonForDate(new Date(g.date)), gameDate: g.dateKey, matchup: `${g.away.abbr} @ ${g.home.abbr}`, odds: l.odds, book: slipState.book, stake, pModel: l.p, pFinal: l.p, ev: l.p != null ? l.p * l.odds - 1 : null };
+        const b = l.kind === "team"
+          ? journalAdd({ ...base, kind: "team", player: l.market === "total" ? `${g.away.abbr} @ ${g.home.abbr}` : l.team, playerId: "team", market: l.market, teamId: l.teamId || g.home.id, oppId: l.oppId || g.away.id, teamAbbr: l.teamAbbr, side: l.market === "total" ? l.side || "over" : null, line: l.line, label: l.label })
+          : journalAdd({ ...base, playerId: l.playerId, player: l.player, market: l.market, side: l.side || "over", line: Number(l.line) });
+        return b.id;
+      });
+      if (combo) {
+        const c = createCombo(ids, stake);
+        const prod = on.reduce((t, l) => t * l.odds, 1);
+        if (slipState.total && Math.abs(slipState.total - prod) < 0.15) updateBet(c.id, { odds: slipState.total });
+      }
+      Object.assign(slipState, { legs: null, status: "" });
+      toast(combo ? `Combiné ajouté ✓ (${on.length} sélections)` : `${on.length} pari${on.length > 1 ? "s" : ""} ajouté${on.length > 1 ? "s" : ""} ✓`);
+      again();
+    } catch (e) { toast(e.message); }
+  });
+}
+
 async function viewJournal(token, keep) {
   const sc = document.getElementById("scroller");
   const y = keep ? sc?.scrollTop || 0 : 0;
@@ -1124,6 +1288,8 @@ async function viewJournal(token, keep) {
       <button role="tab" data-jtab="settled" class="${tab === "settled" ? "on" : ""}">Terminés <span>${done.length}</span></button>
     </div>
     <section data-jpanel="pending"${tab === "pending" ? "" : " hidden"}>
+      <details class="acc jfree" id="slipAcc"${slipState.legs ? " open" : ""}><summary><div class="jplus" style="background:var(--navy)">📸</div><div class="grow"><b>Importer un ticket</b><div class="small muted">capture Betclic / Winamax → lignes de pari</div></div><span class="chev" aria-hidden="true"></span></summary>
+        <div class="acc-body" id="slipBody">${slipBodyHTML()}</div></details>
       <details class="acc jfree"${bets.length ? "" : " open"}><summary><div class="jplus">+</div><div class="grow"><b>Pari libre</b><div class="small muted">n'importe quel pari, réglé à la main</div></div><span class="chev" aria-hidden="true"></span></summary>
         <div class="acc-body"><div class="form">
           <div style="grid-column:1/-1"><label>Joueur</label><input type="text" id="fplayer" placeholder="Jayson Tatum"></div>
@@ -1194,6 +1360,7 @@ async function viewJournal(token, keep) {
     toast(st === "pending" ? "Remis en cours" : `Réglé : ${J_LABEL[st]}`);
     again();
   }));
+  wireSlip(again);
   document.getElementById("freeAdd")?.addEventListener("click", () => {
     const v = (id) => document.getElementById(id).value.trim();
     const n = (id) => parseFloat(v(id).replace(",", "."));

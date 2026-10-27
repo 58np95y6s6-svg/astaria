@@ -325,3 +325,13 @@ img.av, .ph.av { width: 42px; height: 42px; border-radius: 14px; object-fit: cov
 .jleg { min-width: 0; align-items: flex-start; }
 .jleg .grow { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; }
 .jleg .num { flex: none; padding-left: 6px; }
+
+/* ---------- Import de ticket ---------- */
+.slipleg { background: var(--soft); border-radius: 14px; padding: 10px 12px; margin-top: 10px; }
+.slipleg.off { opacity: .5; }
+.sliprow { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
+.sliprow select { flex: 1 1 100%; min-width: 0; background: var(--card); padding: 9px; }
+.sliprow select[data-k="side"] { flex: 1 1 30%; }
+.sliprow input { flex: 1 1 30%; min-width: 0; background: var(--card); padding: 9px; }
+.slipleg .miss { outline: 2px solid var(--accent); }
+#slipText { width: 100%; margin-top: 8px; border: 0; border-radius: 12px; background: var(--soft); padding: 10px; font-size: 16px; font-family: inherit; color: inherit; }

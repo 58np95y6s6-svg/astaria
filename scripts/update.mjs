@@ -9,7 +9,7 @@
 import { scoreboard, summary, teamRoster, parseInjuries, parsePickcenter, priorSeason } from "./lib/espn.mjs";
 import { seasonForDate, etDateKey, shiftDateKey } from "../js/factors.js";
 import { runUpdate } from "./lib/season.mjs";
-import { readJSON, writeJSON, exists, DATA_DIR } from "./lib/store.mjs";
+import { readJSON, writeJSON, DATA_DIR } from "./lib/store.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -79,17 +79,25 @@ await pool(upcoming, 4, async (g) => {
 });
 log("matchs à venir", upcoming.length, "joueurs", playerIds.size);
 
-// 4) Saison précédente des joueurs concernés (une seule fois par joueur)
-const prev = season - 1;
-const missing = [];
-for (const id of playerIds) if (!(await exists(`prior/${prev}/${id}`))) missing.push(id);
-await pool(missing, 6, async (id) => {
-  const rows = await priorSeason(id, prev).catch(() => null);
+// 4) Saisons précédentes des joueurs concernés (une seule fois par joueur et par saison).
+//    Si la saison passée compte moins de 40 matchs (blessure…), on ajoute la saison d'avant.
+const K = ["min", "pts", "fg2m", "fg2a", "fg3m", "fg3a", "ftm", "fta", "reb", "ast", "stl", "blk", "tov"];
+async function fetchPrior(id, yr) {
+  const key = `prior/${yr}/${id}`;
+  const cur = await readJSON(key);
+  if (cur) return cur.rows.length;
+  const rows = await priorSeason(id, yr).catch(() => null);
   // Format compact : [min, pts, fg2m, fg2a, fg3m, fg3a, ftm, fta, reb, ast, stl, blk, tov]
-  const K = ["min", "pts", "fg2m", "fg2a", "fg3m", "fg3a", "ftm", "fta", "reb", "ast", "stl", "blk", "tov"];
-  await writeJSON(`prior/${prev}/${id}`, { keys: K, rows: (rows || []).map((r) => K.map((k) => Math.round((r[k] || 0) * 10) / 10)) });
+  await writeJSON(key, { keys: K, rows: (rows || []).map((r) => K.map((k) => Math.round((r[k] || 0) * 10) / 10)) });
+  return (rows || []).length;
+}
+let priorFetched = 0;
+await pool([...playerIds], 6, async (id) => {
+  const n = await fetchPrior(id, season - 1);
+  if (n < 40) await fetchPrior(id, season - 2);
+  priorFetched++;
 });
-log("saisons précédentes récupérées", missing.length);
+log("saisons précédentes vérifiées", priorFetched);
 
 // 5) Projections précalculées (même modèle que l'app) pour chaque joueur des matchs à venir.
 //    Le téléphone n'a plus qu'à récupérer les cotes et comparer : le Top value s'affiche vite.

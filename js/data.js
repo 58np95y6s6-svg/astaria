@@ -41,10 +41,16 @@ export const getDay = (dateKey) => fetchJSON(`days/${dateKey}`, { optional: true
 export const getCore = (season) => fetchJSON(`s${season}/core`, { ttl: 300e3, optional: true });
 export const getTeamLogs = async (season, teamId) => (await fetchJSON(`s${season}/teams/${teamId}`, { ttl: 300e3, optional: true })) || { players: {} };
 
+// A priori : saison passée, complétée par la saison d'avant si elle compte moins de 40 matchs
+// (ex. joueur blessé une grande partie de la saison).
 export async function getPrior(season, athleteId) {
-  const j = await fetchJSON(`prior/${season - 1}/${athleteId}`, { ttl: 3600e3, optional: true });
-  if (!j?.rows?.length) return null;
-  return j.rows.map((r) => Object.fromEntries(j.keys.map((k, i) => [k, r[i]])));
+  const load = async (yr) => {
+    const j = await fetchJSON(`prior/${yr}/${athleteId}`, { ttl: 3600e3, optional: true });
+    return j?.rows?.length ? j.rows.map((r) => Object.fromEntries(j.keys.map((k, i) => [k, r[i]]))) : [];
+  };
+  let rows = await load(season - 1);
+  if (rows.length < 40) rows = [...(await load(season - 2)), ...rows];
+  return rows.length ? rows : null;
 }
 
 const emptyCore = (season) => ({ season, teams: {}, players: {}, processed: {}, league: { allowed: { G: {}, F: {}, C: {} }, off: {}, poss: 0, teamGames: 0 } });

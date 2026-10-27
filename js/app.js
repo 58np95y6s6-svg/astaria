@@ -1014,7 +1014,7 @@ function pendingCard(b) {
       <div class="grow"><div class="jbet-name ell">${esc(b.player)}</div><div class="small muted ell">${meta}</div></div>
       <div class="jodds num">${f2(b.odds)}</div>
     </div>
-    ${b.check ? `<div class="note warn" style="margin:8px 0">Score final ${esc(b.resultText || "")} : défaite. ${esc(b.player)} a-t-il mené de ${Math.abs(b.line)} pts ? Règle-le à la main.</div>` : ""}
+    ${b.check ? `<div class="note warn" style="margin:8px 0">Score final ${esc(b.resultText || "")} : défaite. ${esc(b.player)} a-t-il possédé une avance de ${Math.abs(b.line)} pts ? Règle-le à la main.</div>` : ""}
     <div class="jbet-pick">${betTitle(b)}${b.pFinal != null ? ` <span class="chip">proba ${pct(b.pFinal)}</span>` : ""}</div>
     <div class="jstats"><div><span>Mise</span><b class="num">${eur(b.stake)}</b></div><div><span>Gain potentiel</span><b class="num up">+${eur(b.stake * (b.odds - 1))}</b></div><div><span>Retour</span><b class="num">${eur(b.stake * b.odds)}</b></div></div>
     <div class="jact">

@@ -7,7 +7,7 @@ import { SHOWN_BOOKS, BOOK_LABEL } from "./value.js";
 
 export const TEAM_MARKETS = {
   ml: "Vainqueur",
-  lead: "Gagne ou mène de X pts",
+  lead: "Gagne ou possède une avance de X pts",
   spread: "Handicap",
   total: "Total du match",
   teamtotal: "Total d'une équipe",
@@ -94,7 +94,7 @@ export function teamLabel(bet, game) {
   const ln = Number(bet.line);
   switch (bet.market) {
     case "ml": return `${t.abbr} vainqueur`;
-    case "lead": return `${t.abbr} gagne ou mène de ${Math.abs(ln)} pts`;
+    case "lead": return `${t.abbr} gagne ou possède une avance de ${Math.abs(ln)} pts`;
     case "spread": {
       const x = Math.abs(ln);
       return ln > 0 ? `${t.abbr} gagne ou perd de moins de ${x} (+${x})` : ln < 0 ? `${t.abbr} gagne de plus de ${x} (−${x})` : `${t.abbr} handicap 0`;

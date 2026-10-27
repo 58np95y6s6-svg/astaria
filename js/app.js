@@ -1,9 +1,9 @@
-import { MARKETS, project, probLine, averages, shotProfile, valueOf } from "./model.js";
+import { MARKETS, project, probLine, averages, shotProfile, valueOf, kelly } from "./model.js";
 import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName } from "./value.js";
 import { getDay, getGameData, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
 import { getGameOdds, cachedGameOdds, quota as oddsQuota, testKey, checkCoverage, SCAN_LEVELS } from "./odds.js";
 import { topValue, topMatchups, cachedTop, diagLines, noFrOdds } from "./picks.js";
-import { addBet as journalAdd, deleteBet, settleAll, exportBets, importBets } from "./journal.js";
+import { addBet as journalAdd, deleteBet, setStatus, settleAll, exportBets, importBets } from "./journal.js";
 
 // ---------- utilitaires ----------
 const $app = document.getElementById("app");
@@ -427,18 +427,22 @@ function renderPlayer(st) {
     <div class="row between"><h2 style="margin:6px 0">${MARKETS[mk].label}</h2><div class="center"><div class="odds num">${f1(sp.mean)}</div><div class="muted small">projection</div></div></div>
     <div class="small muted">Médiane ${sp.median} · 50 % de chances entre ${sp.p25} et ${sp.p75} · saison ${f1(sp.season)} · 10 derniers ${f1(sp.l10)}</div>
     ${spark(sp.l10Values, lineRef, d.logs.slice(-10))}
+    <div class="betbox">
+      <div class="row between"><b>Mon pari · ${MARKETS[mk].short}</b><span class="small muted">calcul instantané</span></div>
+      <div class="form" style="margin-top:8px">
+        <div><label>Bookmaker</label><select id="mbook"><option value="winamax_fr">Winamax</option><option value="betclic_fr">Betclic</option></select></div>
+        <div><label>Côté</label><select id="mside"><option value="over">Plus de</option><option value="under">Moins de</option></select></div>
+        <div><label>Ligne</label><input type="number" inputmode="decimal" step="0.5" id="mline" value="${lineRef}"></div>
+        <div><label>Cote</label><input type="number" inputmode="decimal" step="0.01" id="modds" placeholder="1.85"></div>
+        <div><label>Mise</label><input type="number" inputmode="decimal" step="0.5" id="mstake" placeholder="conseillée"></div>
+      </div>
+      <div id="mres" class="small" style="margin-top:8px"></div>
+      <button class="btn primary scan-btn" id="mjournal" style="margin-top:10px">+ Ajouter au journal</button>
+    </div>
     <h3>Cotes</h3>${offersHtml}
     <h3>Probabilités par ligne (modèle seul)</h3>
     <div class="scroll"><table><thead><tr><th>Ligne</th><th>P(Over)</th><th>Cote juste</th><th>P(Under)</th><th>Cote juste</th><th>10 dern.</th></tr></thead><tbody>${ladder}</tbody></table></div>
     <div class="note">Une cote est « value » si elle est <b>supérieure à la cote juste</b>.</div>
-    <h3>Saisir une cote Winamax / Betclic</h3>
-    <div class="form">
-      <div><label>Bookmaker</label><select id="mbook"><option value="winamax_fr">Winamax</option><option value="betclic_fr">Betclic</option></select></div>
-      <div><label>Ligne</label><input type="number" step="0.5" id="mline" value="${lineRef}"></div>
-      <div><label>Cote Over</label><input type="number" step="0.01" id="mover" placeholder="1.85"></div>
-      <div><label>Cote Under</label><input type="number" step="0.01" id="munder" placeholder="1.85"></div>
-      <div style="align-self:end"><button class="btn primary" id="madd">Calculer</button></div>
-    </div>
   </div>`;
 
   // --- Derniers matchs ---
@@ -500,16 +504,38 @@ function renderPlayer(st) {
   range.addEventListener("change", () => { playerState.minutes = +range.value; renderPlayer(st); });
   document.getElementById("minreset")?.addEventListener("click", () => { playerState.minutes = null; renderPlayer(st); });
   $app.querySelectorAll("[data-mk]").forEach((b) => b.addEventListener("click", () => { playerState.market = b.dataset.mk; renderPlayer(st); }));
-  document.getElementById("madd").addEventListener("click", () => {
-    const line = parseFloat(document.getElementById("mline").value);
-    const over = parseFloat(document.getElementById("mover").value) || null;
-    const under = parseFloat(document.getElementById("munder").value) || null;
-    if (!Number.isFinite(line) || (!over && !under)) { toast("Ligne + au moins une cote"); return; }
-    const book = document.getElementById("mbook").value;
-    const list = (playerState.manual[mk] ||= []).filter((o) => !(o.book === book && o.line === line));
-    list.push({ book, line, over, under, manual: true });
-    playerState.manual[mk] = list;
-    renderPlayer(st);
+  // --- « Mon pari » : calcul en direct + ajout au journal ---
+  const num = (id) => parseFloat(String(document.getElementById(id).value).replace(",", "."));
+  const calc = () => {
+    const line = num("mline"), odds = num("modds"), side = document.getElementById("mside").value;
+    const out = document.getElementById("mres");
+    if (!Number.isFinite(line)) { out.textContent = ""; return null; }
+    const pl = probLine(sp.dist, line);
+    const p = pl[side];
+    const fair = p > 0 ? (1 - pl.push) / p : null;
+    if (!Number.isFinite(odds) || odds <= 1) { out.innerHTML = `Proba modèle <b>${pct(p)}</b> · cote juste <b>${f2(fair)}</b> — saisis la cote pour voir la value.`; return { line, side, p, pl, odds: null }; }
+    const e = p * odds + pl.push - 1;
+    const k = kelly(p / (1 - pl.push || 1), odds);
+    const stakeSug = Math.round(k * settings.bankroll * 10) / 10;
+    const t = tag({ ev: e, pFinal: p });
+    out.innerHTML = `Proba <b>${pct(p)}</b> · cote juste <b>${f2(fair)}</b> · <span class="chip ${t.cls}">${t.text} ${sgnPct(e)}</span> · mise conseillée <b>${stakeSug || 0}</b>`;
+    document.getElementById("mstake").placeholder = stakeSug ? `conseillée ${stakeSug}` : "1";
+    return { line, side, p, pl, odds, e, stakeSug };
+  };
+  ["mline", "modds", "mside"].forEach((id) => document.getElementById(id).addEventListener("input", calc));
+  calc();
+  document.getElementById("mjournal").addEventListener("click", () => {
+    const c = calc();
+    if (!c || !c.odds) { toast("Saisis la ligne et la cote"); return; }
+    const stake = num("mstake") || c.stakeSug || 1;
+    try {
+      journalAdd({
+        market: mk, side: c.side, line: c.line, odds: c.odds, book: document.getElementById("mbook").value, stake,
+        pModel: c.p, pFinal: c.p, ev: c.e, mean: sp.mean,
+        eventId: g.id, season: g.season, gameDate: g.dateKey, matchup: `${g.away.abbr} @ ${g.home.abbr}`, playerId: d.player.id, player: d.player.name,
+      });
+      toast(`Ajouté au journal ✓ (mise ${stake})`);
+    } catch (er) { toast(er.message); }
   });
   $app.querySelectorAll("[data-bet]").forEach((b) => b.addEventListener("click", () => addBet(JSON.parse(b.dataset.bet), d)));
   $app.querySelectorAll("[data-scan-odds]").forEach((b) => b.addEventListener("click", async () => {
@@ -734,18 +760,46 @@ async function viewJournal(token) {
       <div class="kpi"><b>${decided.length ? `${won}/${decided.length}` : "–"}</b><span>Réussite ${decided.length ? pct(won / decided.length) : ""} (attendu ${decided.length ? pct(expected / decided.length) : "–"})</span></div>
       <div class="kpi"><b>${avgOdds ? f2(avgOdds) : "–"}</b><span>Cote moyenne · ${bets.filter((b) => b.status === "pending").length} en cours</span></div>
     </div>
+    <details class="acc"><summary><div class="grow"><b>+ Pari libre</b><div class="small muted">n'importe quel pari, réglé à la main</div></div><span class="chev" aria-hidden="true"></span></summary>
+      <div class="acc-body"><div class="form">
+        <div style="grid-column:1/-1"><label>Joueur</label><input type="text" id="fplayer" placeholder="Jayson Tatum"></div>
+        <div style="grid-column:1/-1"><label>Match (facultatif)</label><input type="text" id="fmatch" placeholder="BKN @ BOS"></div>
+        <div><label>Marché</label><select id="fmarket">${Object.entries(MARKETS).map(([k, m]) => `<option value="${k}">${m.label}</option>`).join("")}</select></div>
+        <div><label>Côté</label><select id="fside"><option value="over">Plus de</option><option value="under">Moins de</option></select></div>
+        <div><label>Ligne</label><input type="number" inputmode="decimal" step="0.5" id="fline"></div>
+        <div><label>Cote</label><input type="number" inputmode="decimal" step="0.01" id="fodds"></div>
+        <div><label>Bookmaker</label><select id="fbook"><option value="winamax_fr">Winamax</option><option value="betclic_fr">Betclic</option></select></div>
+        <div><label>Mise</label><input type="number" inputmode="decimal" step="0.5" id="fstake" value="1"></div>
+      </div><button class="btn primary scan-btn" id="freeAdd" style="margin-top:10px">+ Ajouter au journal</button></div></details>
     ${buckets.length ? `<div class="card"><h2>Fiabilité du modèle</h2><table><thead><tr><th>Proba annoncée</th><th>Paris</th><th>Attendu</th><th>Réel</th></tr></thead><tbody>
       ${buckets.map((x) => `<tr><td>${(x.a * 100).toFixed(0)}–${Math.min(100, x.b * 100).toFixed(0)} %</td><td>${x.n}</td><td>${pct(x.exp / x.n)}</td><td>${pct(x.hit / x.n)}</td></tr>`).join("")}
       </tbody></table><div class="note">Si « Réel » reste nettement sous « Attendu » sur 100+ paris, le modèle est trop optimiste : baisse le poids du modèle dans ⚙︎ Réglages.</div></div>` : ""}
     <div class="card">${bets.length ? bets.map((b) => `<div class="pick row">
       <div class="grow"><div class="main">${esc(b.player)} — ${esc(MARKETS[b.market]?.label || b.market)} ${b.side === "over" ? "Over" : "Under"} ${b.line}</div>
       <div class="small muted">${esc(b.matchup)} · ${b.gameDate ? `${b.gameDate.slice(6, 8)}/${b.gameDate.slice(4, 6)}` : ""} · ${esc(BOOK_LABEL[b.book] || b.book)} · mise ${b.stake}${b.pFinal != null ? ` · proba ${pct(b.pFinal)}` : ""}${b.result != null ? ` · résultat <b>${b.result}</b>` : ""}</div></div>
-      <div class="center"><div class="odds num">${f2(b.odds)}</div><span class="chip ${cls[b.status]}">${label[b.status] || b.status}</span><br><button class="btn sm" data-del="${b.id}" style="margin-top:4px">✕</button></div></div>`).join("") : `<div class="empty">Aucun pari. Ajoute-en depuis une fiche joueur (« + Journal »).</div>`}</div>
+      <div class="center"><div class="odds num">${f2(b.odds)}</div><span class="chip ${cls[b.status]}">${label[b.status] || b.status}</span><br><button class="btn sm" data-del="${b.id}" style="margin-top:4px">✕</button></div></div>
+      ${b.status === "pending" ? `<div class="row settle"><span class="small muted">Régler :</span><button class="btn sm" data-set="${b.id}|won">✓ Gagné</button><button class="btn sm" data-set="${b.id}|lost">✗ Perdu</button><button class="btn sm" data-set="${b.id}|push">↺ Remboursé</button></div>` : b.manual ? `<div class="row settle"><button class="link small" data-set="${b.id}|pending">Annuler le règlement</button></div>` : ""}`).join("") : `<div class="empty">Aucun pari. Ajoute-en depuis une fiche joueur (« + Journal »).</div>`}</div>
     <p class="muted small">Les paris se règlent automatiquement quand la feuille de match est intégrée (toutes les 30 min). Le journal est enregistré sur cet appareil : exporte-le pour le sauvegarder ou le transférer.</p>
     <div class="row wrap"><button class="btn sm" id="jexp">⬇︎ Exporter</button><label class="btn sm">⬆︎ Importer<input type="file" id="jimp" accept="application/json" hidden></label></div>`;
   document.getElementById("jexp").addEventListener("click", exportBets);
   document.getElementById("jimp").addEventListener("change", async (e) => {
     try { const n = await importBets(e.target.files[0]); toast(`${n} pari(s) importé(s)`); viewJournal(routeToken); } catch (er) { toast(er.message); }
+  });
+  $app.querySelectorAll("[data-set]").forEach((b) => b.addEventListener("click", () => {
+    const [id, st] = b.dataset.set.split("|");
+    setStatus(id, st);
+    viewJournal(routeToken);
+  }));
+  const freeForm = document.getElementById("freeAdd");
+  freeForm?.addEventListener("click", () => {
+    const v = (id) => document.getElementById(id).value.trim();
+    const n = (id) => parseFloat(v(id).replace(",", "."));
+    if (!v("fplayer") || !Number.isFinite(n("fline")) || !(n("fodds") > 1)) { toast("Joueur, ligne et cote obligatoires"); return; }
+    try {
+      journalAdd({ eventId: "manual", season: 0, gameDate: etKey(), matchup: v("fmatch"), playerId: "manual", player: v("fplayer"),
+        market: v("fmarket"), side: v("fside"), line: n("fline"), odds: n("fodds"), book: v("fbook"), stake: n("fstake") || 1 });
+      toast("Ajouté ✓"); viewJournal(routeToken);
+    } catch (e) { toast(e.message); }
   });
   $app.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Supprimer ce pari ?")) return;

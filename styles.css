@@ -207,3 +207,7 @@ img.av, .ph.av { width: 42px; height: 42px; border-radius: 14px; object-fit: cov
 .tile.on .tl, .tile.on .tr { color: var(--navy-muted); }
 .scan-btn { width: 100%; padding: 13px; font-size: 15px; }
 .ai-btn { width: 100%; margin: 2px 0 4px; padding: 13px; background: var(--navy); color: #fff; font-size: 15px; box-shadow: var(--shadow); }
+.betbox { background: var(--soft); border-radius: 16px; padding: 12px; margin: 12px 0 4px; }
+.betbox input, .betbox select { background: var(--card); }
+.settle { gap: 6px; flex-wrap: wrap; padding: 0 0 12px; }
+.settle + .pick, .pick:has(+ .settle) { border-bottom: 0; }

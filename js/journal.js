@@ -26,6 +26,17 @@ export function addBet(b) {
   return bet;
 }
 
+// Règlement manuel (won / lost / push / pending).
+export function setStatus(id, status) {
+  const bets = loadBets();
+  const b = bets.find((x) => x.id === id);
+  if (!b) return;
+  b.status = status;
+  b.manual = status !== "pending";
+  b.settledAt = status === "pending" ? null : new Date().toISOString();
+  save(bets);
+}
+
 export function deleteBet(id) { save(loadBets().filter((b) => b.id !== id)); }
 
 export async function settleAll() {

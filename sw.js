@@ -1,6 +1,6 @@
 // Service worker : l'app s'ouvre instantanément et fonctionne hors ligne
 // avec les dernières données consultées.
-const VERSION = "ibibet-v13";
+const VERSION = "ibibet-v14";
 const SHELL = [
   "./", "index.html", "styles.css", "manifest.webmanifest",
   "js/app.js", "js/model.js", "js/value.js", "js/factors.js", "js/data.js", "js/odds.js", "js/journal.js", "js/picks.js",
@@ -48,6 +48,7 @@ self.addEventListener("fetch", (e) => {
   // Application elle-même.
   if (url.origin === location.origin) {
     if (req.mode === "navigate") { e.respondWith(networkFirst(new Request("./"), VERSION).catch(() => caches.match("index.html"))); return; }
-    e.respondWith(staleWhileRevalidate(req, VERSION));
+    // Réseau d'abord : toujours la dernière version quand on est en ligne, cache seulement hors ligne.
+    e.respondWith(networkFirst(req, VERSION));
   }
 });

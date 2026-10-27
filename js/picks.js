@@ -66,7 +66,7 @@ export async function topValue(scope, games, { oddsKey, wModel, onProgress, forc
         for (const r of evaluate(mk, sp, offers, { wModel, allBooks: true })) {
           if (SHOWN_BOOKS.has(r.book) || r.pMarket == null) continue;
           const edge = r.pModel - r.pMarket;
-          if (r.pFinal < 0.55 || edge < 0.03) continue;
+          if (r.pFinal < 0.5 || edge < 0.01) continue; // le modèle doit être plus optimiste que le marché
           targets.push({ ...r, ...base, edge, minOdds: Math.round(r.fair * 1.03 * 100) / 100 });
         }
         const list = evaluate(mk, sp, offers, { wModel });

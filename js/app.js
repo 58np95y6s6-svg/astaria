@@ -123,7 +123,7 @@ function targetRow(t) {
   return `<a class="pick row" href="#/player/${t.playerId}/${t.gameId}/${t.teamId}">
     ${img(t.headshot, "av")}
     <div class="grow"><div class="main ell">${esc(t.player)}</div>
-    <div class="small muted ell">${esc(MARKETS[t.key].short)} ${t.side === "over" ? "Over" : "Under"} ${t.line} · ${pct(t.pFinal)} · réf. ${esc(t.bookLabel)} ${f2(t.odds)}</div></div>
+    <div class="small muted ell">${esc(MARKETS[t.key].short)} ${t.side === "over" ? "Plus de" : "Moins de"} ${t.line} · ${pct(t.pFinal)} · avantage ${t.edge >= 0.03 ? "fort" : "léger"} +${Math.round(t.edge * 100)} pts</div></div>
     <div class="center"><div class="small muted">prends si</div><div class="odds num">≥ ${f2(t.minOdds)}</div></div></a>`;
 }
 
@@ -883,7 +883,21 @@ document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.prev
 
 // ---------- PWA ----------
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((r) => {
+      r.update().catch(() => {});
+      // Revérifie à chaque retour sur l'app (iOS garde l'app ouverte en arrière-plan).
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") r.update().catch(() => {}); });
+    }).catch(() => {});
+  });
+  // Nouvelle version installée → on recharge une fois pour l'afficher.
+  let reloaded = false;
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
 }
 (function installHint() {
   const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;

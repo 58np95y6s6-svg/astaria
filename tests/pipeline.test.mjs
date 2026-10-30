@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { installMockFetch } from "./fixtures.mjs";
+import { installMockFetch, DAYS } from "./fixtures.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "astaria-"));
 process.env.DATA_DIR = dir;
@@ -26,7 +26,7 @@ test("pipeline complet", async () => {
   assert.ok(fs.existsSync(path.join(dir, "prior/2026/101.json")), "saison précédente préparée");
 
   const data = await import("../js/data.js");
-  const day = await data.getDay("20261027");
+  const day = await data.getDay(DAYS.g4);
   assert.equal(day.games[0].id, "9004");
 
   const gd = await data.getGameData("9004");
@@ -82,7 +82,7 @@ test("pipeline complet", async () => {
   assert.equal(bets.find((b) => b.playerId === "101").status, "won");
   assert.equal(bets.find((b) => b.playerId === "999").status, "void");
   // Pari libre : retrouvé par le nom du joueur et la date
-  j.addBet({ eventId: "manual", season: 0, gameDate: "20261024", playerId: "manual", player: "jayson tatum", market: "pts", side: "under", line: 99.5, odds: 1.8 });
+  j.addBet({ eventId: "manual", season: 0, gameDate: DAYS.g2, playerId: "manual", player: "jayson tatum", market: "pts", side: "under", line: 99.5, odds: 1.8 });
   const b2 = await j.settleAll();
   const free = b2.find((b) => b.line === 99.5);
   assert.equal(free.status, "won");
@@ -107,9 +107,9 @@ test("pipeline complet", async () => {
   assert.ok(!b4.some((b) => b.id === c4.id) && b4.filter((b) => b.player === "X" || b.player === "Y").length === 2);
 
   // Paris équipe : réglés avec le score final (9002 : NYK reçoit BOS)
-  const tb = j.addBet({ kind: "team", eventId: "9002", season: 2027, gameDate: "20261024", matchup: "BOS @ NYK", player: "New York Knicks", playerId: "team",
+  const tb = j.addBet({ kind: "team", eventId: "9002", season: 2027, gameDate: DAYS.g2, matchup: "BOS @ NYK", player: "New York Knicks", playerId: "team",
     market: "ml", teamId: "3", oppId: "1", odds: 1.9, label: "NYK vainqueur" });
-  const tt = j.addBet({ kind: "team", eventId: "9002", season: 2027, gameDate: "20261024", matchup: "BOS @ NYK", player: "BOS @ NYK", playerId: "team",
+  const tt = j.addBet({ kind: "team", eventId: "9002", season: 2027, gameDate: DAYS.g2, matchup: "BOS @ NYK", player: "BOS @ NYK", playerId: "team",
     market: "total", teamId: "3", oppId: "1", side: "over", line: 0.5, odds: 1.9, label: "Total match Plus de 0.5" });
   const b5 = await j.settleAll();
   const s1 = b5.find((b) => b.id === tb.id), s2 = b5.find((b) => b.id === tt.id);

@@ -1,7 +1,7 @@
 import { MARKETS, project, probLine, averages, shotProfile, valueOf, kelly, blend } from "./model.js";
 import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName, marketConsensus } from "./value.js";
 import { getDay, getGameData, getCore, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
-import { parseSlip, ocrImage } from "./slip.js";
+import { parseSlip, ocrImage, legsOdds } from "./slip.js";
 import { seasonForDate } from "./factors.js";
 import { getTeamOdds, cachedTeamOdds, getGameOdds, cachedGameOdds, quota as oddsQuota, testKey, checkCoverage, SCAN_LEVELS } from "./odds.js";
 import { TEAM_MARKETS, projectGame, teamProb, teamLabel, evaluateTeam } from "./team.js";
@@ -913,7 +913,7 @@ const dayShort = (k) => `${k.slice(6, 8)}/${k.slice(4, 6)}`;
 const initials = (name) => String(name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 const jState = { combine: false, sel: new Set() };
 const legIcon = (st) => ({ won: "✓", lost: "✗", push: "↺", void: "–", pending: "•" }[st] || "•");
-const legLine = (l) => `<div class="jleg ${l.status}"><span class="jleg-i">${legIcon(l.status)}</span><div class="grow ell">${l.kind === "team" ? `<b>${esc(l.label)}</b>${l.resultText ? ` <span class="muted">(${l.resultText})</span>` : ""}` : `<b>${esc(l.player)}</b> · ${esc(MARKETS[l.market]?.short || l.market)} ${l.side === "under" ? "Moins" : "Plus"} ${l.line}${l.result != null ? ` <span class="muted">(${l.result})</span>` : ""}`}</div><span class="num">${f2(l.odds)}</span></div>`;
+const legLine = (l) => `<div class="jleg ${l.status}"><span class="jleg-i">${legIcon(l.status)}</span><div class="grow ell">${l.kind === "team" ? `<b>${esc(l.label)}</b>${l.resultText ? ` <span class="muted">(${l.resultText})</span>` : ""}` : `<b>${esc(l.player)}</b> · ${esc(MARKETS[l.market]?.short || l.market)} ${l.side === "under" ? "Moins" : "Plus"} ${l.line}${l.result != null ? ` <span class="muted">(${l.result})</span>` : ""}`}</div><span class="num">${l.group ? `<span class="chip" title="MYCOMBI">MC ${f2(l.groupOdds)}</span>` : f2(l.odds)}</span></div>`;
 const betTitle = (b) => b.kind === "team" ? esc(b.label) : betTitle0(b);
 const betTitle0 = (b) => `${esc(MARKETS[b.market]?.label || b.market)} · ${b.side === "under" ? "Moins de" : "Plus de"} ${b.line}`;
 
@@ -1115,14 +1115,14 @@ function computeSlipLeg(leg) {
     if (leg.ok && leg.tproj) leg.p = teamProb(leg.tproj, leg.game, bet);
   } else {
     leg.label = `${leg.player} · ${MARKETS[leg.market]?.label || "?"} ${leg.side === "under" ? "Moins" : "Plus"} de ${leg.line ?? "?"}`;
-    leg.ok = !!leg.game && !!MARKETS[leg.market] && Number.isFinite(Number(leg.line)) && leg.odds > 1;
+    leg.ok = !!leg.game && !!MARKETS[leg.market] && Number.isFinite(Number(leg.line)) && (leg.odds > 1 || leg.groupOdds > 1);
     if (leg.ok && leg.pproj?.m?.[leg.market]) leg.p = probLine(statFromProj(leg.pproj, leg.market).dist, Number(leg.line))[leg.side || "over"];
   }
   return leg;
 }
 
 function slipLegHTML(l, i) {
-  const ev = l.p != null && l.odds > 1 ? l.p * l.odds - 1 : null;
+  const ev = l.p != null && l.odds > 1 && !l.group ? l.p * l.odds - 1 : null;
   const t = ev != null ? tag({ ev, pFinal: l.p }) : null;
   const typeSel = l.kind === "team" ? `<select data-sl="${i}" data-k="type">${SLIP_TYPES.map(([k, n]) => `<option value="${k}"${l.type === k ? " selected" : ""}>${n}</option>`).join("")}</select>`
     : `<select data-sl="${i}" data-k="market">${Object.entries(MARKETS).map(([k, m]) => `<option value="${k}"${l.market === k ? " selected" : ""}>${m.label}</option>`).join("")}</select>`;
@@ -1130,21 +1130,21 @@ function slipLegHTML(l, i) {
     : `<select data-sl="${i}" data-k="side"><option value="over"${l.side !== "under" ? " selected" : ""}>Plus de</option><option value="under"${l.side === "under" ? " selected" : ""}>Moins de</option></select><input type="number" inputmode="decimal" step="0.5" data-sl="${i}" data-k="line" value="${l.line ?? ""}" placeholder="ligne" class="${l.line == null ? "miss" : ""}">`;
   return `<div class="slipleg${l.on ? "" : " off"}">
     <label class="row" style="gap:8px;margin:0;color:inherit"><input type="checkbox" data-sl="${i}" data-k="on"${l.on ? " checked" : ""}><b class="grow">${esc(l.kind === "team" ? (l.team || "Équipe ?") : l.player)}</b><span class="small muted">${l.game ? esc(`${l.game.away.abbr} @ ${l.game.home.abbr}`) : "match introuvable"}</span></label>
-    <div class="sliprow">${typeSel}${lineField}<input type="number" inputmode="decimal" step="0.01" data-sl="${i}" data-k="odds" value="${l.odds ?? ""}" placeholder="cote" class="odds-in${l.odds ? "" : " miss"}"></div>
-    <div class="small" data-slres="${i}">${esc(l.label)}${l.p != null ? ` · proba <b>${pct(l.p)}</b> · cote juste ${f2(1 / l.p)} · <span class="chip ${t.cls}">${sgnPct(ev)}</span>` : ""}${!l.ok ? ` · <span class="down">à compléter</span>` : ""}</div>
+    <div class="sliprow">${typeSel}${lineField}${l.group ? `<label class="small muted" style="flex:1 1 30%;margin:0;align-self:center">MYCOMBI · cote du groupe <input type="number" inputmode="decimal" step="0.01" data-sl="${i}" data-k="groupOdds" value="${l.groupOdds ?? ""}" class="${l.groupOdds ? "" : "miss"}" style="margin-top:4px"></label>` : `<input type="number" inputmode="decimal" step="0.01" data-sl="${i}" data-k="odds" value="${l.odds ?? ""}" placeholder="cote" class="odds-in${l.odds ? "" : " miss"}">`}</div>
+    <div class="small" data-slres="${i}">${esc(l.label)}${l.p != null ? ` · proba <b>${pct(l.p)}</b> · cote juste ${f2(1 / l.p)}${ev != null ? ` · <span class="chip ${t.cls}">${sgnPct(ev)}</span>` : ""}` : ""}${!l.ok ? ` · <span class="down">à compléter</span>` : ""}</div>
   </div>`;
 }
 
 function slipFooterHTML() {
   const on = slipState.legs.filter((l) => l.on);
-  const prod = on.reduce((t, l) => t * (l.odds || 1), 1);
+  const prod = legsOdds(on);
   const pAll = on.length && on.every((l) => l.p != null) ? on.reduce((t, l) => t * l.p, 1) : null;
-  const odds = slipState.combo && on.length > 1 ? (slipState.total && Math.abs(slipState.total - prod) < 0.15 ? slipState.total : Math.round(prod * 100) / 100) : null;
+  const odds = (slipState.combo || on.some((l) => l.group)) && on.length > 1 ? (slipState.total && Math.abs(slipState.total - prod) < 0.15 ? slipState.total : Math.round(prod * 100) / 100) : null;
   return `<div class="row wrap" style="gap:10px;margin-top:10px">
       <select id="slipBook" style="flex:1"><option value="betclic_fr"${slipState.book === "betclic_fr" ? " selected" : ""}>Betclic</option><option value="winamax_fr"${slipState.book === "winamax_fr" ? " selected" : ""}>Winamax</option></select>
       <input type="number" inputmode="decimal" step="0.5" id="slipStake" placeholder="Mise (€)" value="${esc(slipState.stake)}" style="flex:1">
     </div>
-    ${on.length > 1 ? `<label class="row" style="gap:8px;margin:10px 0 0;color:inherit"><input type="checkbox" id="slipCombo"${slipState.combo ? " checked" : ""}> En combiné ${odds ? `· cote <b>${f2(odds)}</b>` : ""}${pAll != null && slipState.combo ? ` · proba ${pct(pAll)} · value <b class="${pAll * odds - 1 >= 0 ? "up" : "down"}">${sgnPct(pAll * odds - 1)}</b>` : ""}</label>` : ""}
+    ${on.length > 1 ? `<label class="row" style="gap:8px;margin:10px 0 0;color:inherit"><input type="checkbox" id="slipCombo"${slipState.combo || on.some((l) => l.group) ? " checked" : ""}${on.some((l) => l.group) ? " disabled" : ""}> En combiné ${odds ? `· cote <b>${f2(odds)}</b>` : ""}${pAll != null && slipState.combo ? ` · proba ${pct(pAll)} · value <b class="${pAll * odds - 1 >= 0 ? "up" : "down"}">${sgnPct(pAll * odds - 1)}</b>` : ""}</label>` : ""}
     <button class="btn primary scan-btn" id="slipAdd" style="margin-top:10px">+ Ajouter ${on.length} pari${on.length > 1 ? "s" : ""} au journal</button>`;
 }
 
@@ -1183,6 +1183,7 @@ function wireSlip(again) {
   body.querySelectorAll("[data-sl]").forEach((el) => el.addEventListener(el.type === "checkbox" ? "change" : "input", () => {
     const leg = slipState.legs[+el.dataset.sl], k = el.dataset.k;
     if (k === "on") leg.on = el.checked;
+    else if (k === "groupOdds") { const v = el.value === "" ? null : parseFloat(String(el.value).replace(",", ".")); slipState.legs.filter((x) => x.group === leg.group).forEach((x) => { x.groupOdds = v; computeSlipLeg(x); }); }
     else if (["x", "odds", "line"].includes(k)) leg[k] = el.value === "" ? null : parseFloat(String(el.value).replace(",", "."));
     else leg[k] = el.value;
     computeSlipLeg(leg);
@@ -1208,11 +1209,13 @@ function wireSlipFoot(again) {
     if (!on.length) { toast("Aucune sélection cochée"); return; }
     if (bad.length) { toast("Complète les sélections en rouge (ou décoche-les)"); return; }
     const stake = parseFloat(String(slipState.stake).replace(",", ".")) || 1;
-    const combo = slipState.combo && on.length > 1;
+    const combo = (slipState.combo || on.some((l) => l.group)) && on.length > 1;
+    const gid = Date.now().toString(36);
     try {
       const ids = on.map((l) => {
         const g = l.game;
-        const base = { eventId: g.id, season: seasonForDate(new Date(g.date)), gameDate: g.dateKey, matchup: `${g.away.abbr} @ ${g.home.abbr}`, odds: l.odds, book: slipState.book, stake, pModel: l.p, pFinal: l.p, ev: l.p != null ? l.p * l.odds - 1 : null };
+        const grp = l.group ? { group: `${gid}-${l.group}`, groupOdds: l.groupOdds } : {};
+        const base = { ...grp, eventId: g.id, season: seasonForDate(new Date(g.date)), gameDate: g.dateKey, matchup: `${g.away.abbr} @ ${g.home.abbr}`, odds: l.odds, book: slipState.book, stake, pModel: l.p, pFinal: l.p, ev: l.p != null ? l.p * l.odds - 1 : null };
         const b = l.kind === "team"
           ? journalAdd({ ...base, kind: "team", player: l.market === "total" ? `${g.away.abbr} @ ${g.home.abbr}` : l.team, playerId: "team", market: l.market, teamId: l.teamId || g.home.id, oppId: l.oppId || g.away.id, teamAbbr: l.teamAbbr, side: l.market === "total" ? l.side || "over" : null, line: l.line, label: l.label })
           : journalAdd({ ...base, playerId: l.playerId, player: l.player, market: l.market, side: l.side || "over", line: Number(l.line) });
@@ -1220,7 +1223,7 @@ function wireSlipFoot(again) {
       });
       if (combo) {
         const c = createCombo(ids, stake);
-        const prod = on.reduce((t, l) => t * l.odds, 1);
+        const prod = legsOdds(on);
         if (slipState.total && Math.abs(slipState.total - prod) < 0.15) updateBet(c.id, { odds: slipState.total });
       }
       Object.assign(slipState, { legs: null, status: "" });
@@ -1348,7 +1351,7 @@ async function viewJournal(token, keep) {
   }));
   $app.querySelectorAll("[data-save]").forEach((b) => b.addEventListener("click", () => {
     const box = document.getElementById(`edit-${b.dataset.save}`);
-    const val = (f) => box.querySelector(`[data-f="${f}"]`).value;
+    const val = (f) => box.querySelector(`[data-f="${f}"]`)?.value ?? "";
     const n = (f) => parseFloat(String(val(f)).replace(",", "."));
     updateBet(b.dataset.save, { stake: n("stake"), odds: n("odds"), line: n("line"), side: val("side"), book: val("book") });
     toast("Pari modifié ✓");

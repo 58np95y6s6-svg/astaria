@@ -5,6 +5,7 @@ import { gradeTeam, teamLabel } from "./team.js";
 import { valueOf } from "./model.js";
 import { normName } from "./value.js";
 import { seasonForDate, shiftDateKey } from "./factors.js";
+import { legsOdds } from "./slip.js";
 
 const KEY = "astaria-journal";
 
@@ -23,6 +24,8 @@ export function addBet(b) {
     line: Number(b.line), odds: Number(b.odds), book: b.book || "manual", stake: Number(b.stake) || 1,
     pModel: b.pModel ?? null, pFinal: b.pFinal ?? null, ev: b.ev ?? null, mean: b.mean ?? null,
   };
+  // Sélection d'une MYCOMBI : pas de cote propre, la cote est celle du groupe.
+  if (b.group) Object.assign(bet, { group: String(b.group), groupOdds: Number(b.groupOdds) || null, odds: b.odds > 1 ? Number(b.odds) : null });
   if (b.kind === "team") {
     // Pari équipe : vainqueur, handicap, total du match, total d'une équipe.
     Object.assign(bet, { kind: "team", teamId: b.teamId ?? null, oppId: b.oppId ?? null, teamAbbr: b.teamAbbr || null, label: String(b.label || ""),
@@ -135,7 +138,7 @@ export function comboOutcome(legs) {
   if (legs.some((l) => l.status === "pending")) return { status: "pending", odds: null };
   const won = legs.filter((l) => l.status === "won");
   if (!won.length) return { status: "push", odds: 1 };
-  return { status: "won", odds: Math.round(won.reduce((t, l) => t * l.odds, 1) * 100) / 100 };
+  return { status: "won", odds: legsOdds(won) };
 }
 
 export async function settleAll() {
@@ -161,14 +164,14 @@ export async function settleAll() {
   return bets;
 }
 
-const LEG_FIELDS = ["kind", "teamId", "oppId", "teamAbbr", "label", "resultText", "scoreT", "scoreO", "player", "playerId", "eventId", "season", "gameDate", "matchup", "market", "side", "line", "odds", "book", "pFinal", "pModel", "status", "result", "settledAt"];
+const LEG_FIELDS = ["group", "groupOdds", "kind", "teamId", "oppId", "teamAbbr", "label", "resultText", "scoreT", "scoreO", "player", "playerId", "eventId", "season", "gameDate", "matchup", "market", "side", "line", "odds", "book", "pFinal", "pModel", "status", "result", "settledAt"];
 
 // Regroupe des paris simples en cours en un combiné (cote = produit des cotes).
 export function createCombo(ids, stake) {
   const bets = loadBets();
   const legs = ids.map((id) => bets.find((b) => b.id === id)).filter((b) => b && b.status === "pending" && b.type !== "combo");
   if (legs.length < 2) throw new Error("Sélectionne au moins 2 paris en cours");
-  const odds = Math.round(legs.reduce((t, l) => t * l.odds, 1) * 100) / 100;
+  const odds = legsOdds(legs);
   const allP = legs.every((l) => l.pFinal != null);
   const books = [...new Set(legs.map((l) => l.book))];
   const combo = {

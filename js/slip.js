@@ -56,6 +56,53 @@ function statOf(t) {
   return null;
 }
 
+// Format « Nom + de X » (Betclic) : une sélection joueur par ligne, la stat sur la ligne suivante.
+// Gère aussi les MYCOMBI (plusieurs sélections du même match, une seule cote pour le groupe).
+const SEL_RE = /^(.*?)\s*(\+|-|−|plus|moins)\s*de\s*(\d{1,2}(?:[,.]\d)?)(?!\d)(.*)$/;
+function parsePlayerList(lines, players) {
+  if (!players) return [];
+  const legs = [];
+  let group = null, gn = 0;
+  const oddsIn = (t) => { const m = [...String(t).matchAll(ODDS_RE)].map((x) => num(x[1])).filter((x) => x > 1 && x < 60); return m.length ? m[m.length - 1] : null; };
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i], n = norm(l);
+    if (/€|cote\s*totale|gains?\s*possibles?|gains?\s*potentiels?/.test(n)) continue;
+    if (/my ?combi|bet ?builder|meme match|same game/.test(n)) {
+      group = { id: `g${++gn}`, odds: oddsIn(l) ?? (i + 1 < lines.length ? oddsIn(lines[i + 1]) : null) };
+      continue;
+    }
+    const m = SEL_RE.exec(n);
+    const who = m ? playerIn(m[1], players) : null;
+    if (who) {
+      legs.push({ kind: "player", player: who.name, playerId: who.id, playerTeamId: who.teamId,
+        side: /^(-|−|moins)/.test(m[2]) ? "under" : "over", line: num(m[3]), odds: group ? null : oddsIn(m[4]),
+        group: group?.id || null, groupOdds: group?.odds || null, market: statOf(m[4]), text: l, missing: [] });
+      continue;
+    }
+    const last = legs[legs.length - 1];
+    if (!last) continue;
+    if (TIME_RE.test(n) || teamsIn(l).length >= 2) { group = null; continue; } // rappel du match : fin du groupe
+    if (!last.market && /nombre de|total du joueur|du joueur|points?|rebonds?|passes?/.test(n)) { last.market = statOf(n); continue; }
+    if (last.odds == null && !last.group) { const o = oddsIn(l); if (o) last.odds = o; }
+  }
+  for (const l of legs) {
+    if (!l.market) l.missing.push("stat");
+    if (l.odds == null && !l.groupOdds) l.missing.push("cote");
+  }
+  return legs;
+}
+
+// Cote d'un ensemble de sélections : une MYCOMBI compte une seule fois sa cote de groupe.
+export function legsOdds(legs) {
+  const seen = new Set();
+  let p = 1;
+  for (const l of legs) {
+    if (l.group) { if (!seen.has(l.group)) { seen.add(l.group); p *= l.groupOdds || 1; } }
+    else p *= l.odds || 1;
+  }
+  return Math.round(p * 100) / 100;
+}
+
 /**
  * text : texte du ticket. ctx : { players } (index des joueurs, pour reconnaître les paris joueurs).
  * Retourne { book, legs: [{ kind, team, teamNick, player, playerId, market, side, x, line, odds, text, missing }], totalOdds, stake }.
@@ -63,9 +110,14 @@ function statOf(t) {
 export function parseSlip(text, ctx = {}) {
   const lines = String(text).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const all = norm(text);
+  const pl = parsePlayerList(lines, ctx.players);
   const book = /betclic|bet clic|befclic/.test(all) ? "betclic_fr" : /winamax|enregistres|completer|sport\s+poker/.test(all) ? "winamax_fr" : null;
-  const totalM = /cote\s*totale\D{0,6}(\d{1,3}[,.]\d{1,2})/.exec(all);
+  const totalM = /cote\s*totale[^a-z0-9]{0,6}(\d{1,3}[,.]\d{1,2})/.exec(all);
   const stakeM = /mise\D{0,8}(\d{1,4}(?:[,.]\d{1,2})?)\s*€/.exec(all);
+  if (pl.length) {
+    const product = legsOdds(pl);
+    return { book, legs: pl, totalOdds: totalM ? num(totalM[1]) : product, product, stake: stakeM ? num(stakeM[1]) : null };
+  }
   // Lignes « rappel du match » (deux équipes, ou un horaire) : on les ignore.
   const isMatchLine = (l) => teamsIn(l).length >= 2 || TIME_RE.test(norm(l));
   const legs = [];

@@ -16,11 +16,20 @@ function line(seed, min) {
   const pts = 2 * fg2m + 3 * fg3m + ftm;
   return [String(min), String(pts), `${fg2m + fg3m}-${fg2a + fg3a}`, `${fg3m}-${fg3a}`, `${ftm}-${fta}`, String(5 + r(4)), String(3 + r(5)), "2", "1", String(r(6) % 3), "1", String(4 + r(4)), "2", "+3"];
 }
+// Dates relatives à aujourd'hui (heure de New York) : les tests ne vieillissent pas.
+function day(offset) {
+  const k = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const d = new Date(`${k}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + offset);
+  const iso = d.toISOString().slice(0, 10);
+  return { date: `${iso}T23:30Z`, key: iso.replaceAll("-", "") };
+}
+export const DAYS = { g1: day(-8).key, g2: day(-6).key, g3: day(-5).key, g4: day(1).key };
 const GAMES = [
-  { id: "9001", date: "2026-10-22T23:30Z", key: "20261022", home: "1", away: "2", done: true },
-  { id: "9002", date: "2026-10-24T23:30Z", key: "20261024", home: "3", away: "1", done: true },
-  { id: "9003", date: "2026-10-25T23:30Z", key: "20261025", home: "2", away: "3", done: true },
-  { id: "9004", date: "2026-10-27T23:30Z", key: "20261027", home: "2", away: "1", done: false },
+  { id: "9001", ...day(-8), home: "1", away: "2", done: true },
+  { id: "9002", ...day(-6), home: "3", away: "1", done: true },
+  { id: "9003", ...day(-5), home: "2", away: "3", done: true },
+  { id: "9004", ...day(1), home: "2", away: "1", done: false },
 ];
 const comp = (g) => ({
   id: g.id, date: g.date,
@@ -75,7 +84,7 @@ globalThis.fetch = async (input) => {
       seasonTypes: [{ displayName: "2025-26 Regular Season", categories: [{ events: Array.from({ length: 40 }, () => ({ stats: ["34", "9-19", "47", "3-8", "37", "4-5", "80", "7", "6", "1", "1", "2", "3", "25"] })) }] }] });
   }
   if (u.hostname === "api.the-odds-api.com") {
-    if (u.pathname.endsWith("/events")) return ok([{ id: "oddsev1", home_team: "Los Angeles Lakers", away_team: "Boston Celtics", commence_time: "2026-10-27T23:30:00Z" }]);
+    if (u.pathname.endsWith("/events")) return ok([{ id: "oddsev1", home_team: "Los Angeles Lakers", away_team: "Boston Celtics", commence_time: GAMES[3].date.replace("Z", ":00Z") }]);
     return ok({ bookmakers: [
       { key: "winamax_fr", title: "Winamax", markets: [{ key: "player_points", outcomes: [
         { name: "Over", description: "Jayson Tatum", price: 2.1, point: 18.5 }, { name: "Under", description: "Jayson Tatum", price: 1.7, point: 18.5 }] }] },

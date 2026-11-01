@@ -335,3 +335,4 @@ img.av, .ph.av { width: 42px; height: 42px; border-radius: 14px; object-fit: cov
 .sliprow input { flex: 1 1 30%; min-width: 0; background: var(--card); padding: 9px; }
 .slipleg .miss { outline: 2px solid var(--accent); }
 #slipText { width: 100%; margin-top: 8px; border: 0; border-radius: 12px; background: var(--soft); padding: 10px; font-size: 16px; font-family: inherit; color: inherit; }
+#slipFoot label { flex-wrap: wrap; line-height: 1.5; }

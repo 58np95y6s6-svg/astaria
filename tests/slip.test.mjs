@@ -41,3 +41,13 @@ test("ticket Betclic « Nom + de X » + MYCOMBI : groupe à cote unique, cote to
   legs[2].status = "lost";
   assert.equal(comboOutcome(legs).status, "lost", "une sélection de la MYCOMBI perdue → combiné perdu");
 });
+
+test("ticket Betclic Face à Face (MYCOMBI) : duels lus, cote déduite des gains ÷ mise", () => {
+  const players = { 1: { name: "Desmond Bane", teamId: "19" }, 2: { name: "Paul George", teamId: "20" } };
+  const r = parseSlip(read("ticket-betclic-face-a-face.txt"), { players });
+  assert.equal(r.stake, 1.5);
+  assert.equal(r.totalOdds, 2.85, "4,28 € ÷ 1,50 €");
+  assert.deepEqual(r.legs.map((l) => [l.h2h, l.player, l.market, l.opp, l.groupOdds]), [
+    [true, "Desmond Bane", "ast", "Paul George", 2.85], [true, "Paul George", "reb", "Desmond Bane", 2.85],
+  ]);
+});

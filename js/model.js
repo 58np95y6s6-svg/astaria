@@ -232,3 +232,17 @@ export function blend(pModel, pMarket, wModel = 0.6) {
   if (pMarket == null) return pModel;
   return wModel * pModel + (1 - wModel) * pMarket;
 }
+
+// Face à face : P(A > B), P(égalité) pour deux distributions indépendantes (tableaux de probabilités).
+export function h2hProb(distA, distB) {
+  const sA = distA.reduce((t, x) => t + x, 0) || 1, sB = distB.reduce((t, x) => t + x, 0) || 1;
+  let win = 0, tie = 0, lose = 0, cumB = 0;
+  for (let a = 0; a < distA.length; a++) {
+    const pa = distA[a] / sA, pb = (distB[a] || 0) / sB;
+    tie += pa * pb;
+    win += pa * cumB;              // B strictement inférieur à a
+    lose += pa * (1 - cumB - pb);  // B strictement supérieur à a
+    cumB += pb;
+  }
+  return { win, tie, lose };
+}

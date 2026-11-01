@@ -1,4 +1,4 @@
-import { MARKETS, project, probLine, averages, shotProfile, valueOf, kelly, blend } from "./model.js";
+import { MARKETS, project, probLine, averages, shotProfile, valueOf, kelly, blend, h2hProb } from "./model.js";
 import { evaluate, tag, BOOK_LABEL, FR_BOOKS, SHOWN_BOOKS, normName, marketConsensus } from "./value.js";
 import { getDay, getGameData, getCore, teamRoster, teamContext, buildContext, getMeta, REPO_URL } from "./data.js";
 import { parseSlip, ocrImage, legsOdds } from "./slip.js";
@@ -414,6 +414,8 @@ async function viewPlayer(token, pid, gid, tid) {
   if (stale(token)) return;
   // Les cotes ne sont demandées que sur le bouton « Scanner » (sauf si déjà en cache : gratuit).
   const st = { data, odds: cachedGameOdds(gid) || { idle: true } };
+  st.projFile = await getProjections(gid).catch(() => null); // projections de tous les joueurs du match (face à face)
+  if (stale(token)) return;
   renderPlayer(st);
 }
 
@@ -589,8 +591,12 @@ function renderPlayer(st) {
       <div class="row between"><b>Mon pari · ${MARKETS[mk].short}</b><span class="small muted">calcul instantané</span></div>
       <div class="form" style="margin-top:8px">
         <div><label>Bookmaker</label><select id="mbook"><option value="winamax_fr">Winamax</option><option value="betclic_fr">Betclic</option></select></div>
-        <div><label>Côté</label><select id="mside"><option value="over">Plus de</option><option value="under">Moins de</option></select></div>
-        <div><label>Ligne</label><input type="number" inputmode="decimal" step="0.5" id="mline" value="${lineRef}"></div>
+        <div><label>Côté</label><select id="mside"><option value="over">Plus de</option><option value="under">Moins de</option>${st.projFile ? `<option value="h2h">Plus que… (face à face)</option>` : ""}</select></div>
+        <div id="mlinew"><label>Ligne</label><input type="number" inputmode="decimal" step="0.5" id="mline" value="${lineRef}"></div>
+        <div id="moppw" hidden style="grid-column:1/-1"><label>Face à face contre</label><select id="mopp">${Object.entries(st.projFile?.players || {})
+          .filter(([id]) => id !== d.player.id)
+          .sort((x, y) => (x[1].teamId === d.teamId) - (y[1].teamId === d.teamId) || y[1].min - x[1].min)
+          .map(([id, p]) => `<option value="${id}">${esc(p.name)} (${esc(p.teamId === g.home.id ? g.home.abbr : g.away.abbr)})</option>`).join("")}</select></div>
         <div><label>Cote</label><input type="number" inputmode="decimal" step="0.01" id="modds" placeholder="1.85"></div>
         <div><label>Mise (€)</label><input type="number" inputmode="decimal" step="0.5" id="mstake" placeholder="conseillée"></div>
       </div>
@@ -672,6 +678,21 @@ function renderPlayer(st) {
   const calc = () => {
     const line = num("mline"), odds = num("modds"), side = document.getElementById("mside").value;
     const out = document.getElementById("mres");
+    document.getElementById("moppw").hidden = side !== "h2h";
+    document.getElementById("mlinew").hidden = side === "h2h";
+    if (side === "h2h") {
+      // Face à face : P(joueur > adversaire) ; égalité = remboursé.
+      const oppId = document.getElementById("mopp").value, op = st.projFile?.players?.[oppId];
+      if (!op?.m?.[mk]) { out.textContent = "Projection de l'adversaire indisponible."; return null; }
+      const r = h2hProb(sp.dist, statFromProj(op, mk).dist);
+      const p = r.win, fair = p > 0 ? (1 - r.tie) / p : null;
+      const head = `${esc(h2hLabel(d.player.name, mk, op.name))} · proba <b>${pct(p)}</b> (égalité ${pct(r.tie)}) · cote juste <b>${f2(fair)}</b>`;
+      if (!(odds > 1)) { out.innerHTML = head; return { h2h: true, oppId, opp: op.name, p, odds: null }; }
+      const e = p * odds + r.tie - 1, k = kelly(p / (1 - r.tie || 1), odds), stakeSug = Math.round(k * settings.bankroll * 10) / 10, t = tag({ ev: e, pFinal: p });
+      out.innerHTML = `${head} · <span class="chip ${t.cls}">${t.text} ${sgnPct(e)}</span> · mise conseillée <b>${eur(stakeSug || 0)}</b>`;
+      document.getElementById("mstake").placeholder = stakeSug ? `conseillée ${stakeSug} €` : "1 €";
+      return { h2h: true, oppId, opp: op.name, p, odds, e, stakeSug };
+    }
     if (!Number.isFinite(line)) { out.textContent = ""; return null; }
     const pl = probLine(sp.dist, line);
     const p = pl[side];
@@ -685,7 +706,7 @@ function renderPlayer(st) {
     document.getElementById("mstake").placeholder = stakeSug ? `conseillée ${stakeSug} €` : "1 €";
     return { line, side, p, pl, odds, e, stakeSug };
   };
-  ["mline", "modds", "mside"].forEach((id) => document.getElementById(id).addEventListener("input", calc));
+  ["mline", "modds", "mside", "mopp"].forEach((id) => document.getElementById(id).addEventListener("input", calc));
   if (playerState.prefill) {
     document.getElementById("mside").value = playerState.prefill.side;
     document.getElementById("mline").value = playerState.prefill.line;
@@ -697,6 +718,12 @@ function renderPlayer(st) {
     if (!c || !c.odds) { toast("Saisis la ligne et la cote"); return; }
     const stake = num("mstake") || c.stakeSug || 1;
     try {
+      if (c.h2h) {
+        journalAdd({ market: mk, h2h: true, oppId: c.oppId, opp: c.opp, label: h2hLabel(d.player.name, mk, c.opp), odds: c.odds, book: document.getElementById("mbook").value, stake,
+          pModel: c.p, pFinal: c.p, ev: c.e, eventId: g.id, season: g.season, gameDate: g.dateKey, matchup: `${g.away.abbr} @ ${g.home.abbr}`, playerId: d.player.id, player: d.player.name });
+        toast(`Ajouté au journal ✓ (mise ${eur(stake)})`);
+        return;
+      }
       journalAdd({
         market: mk, side: c.side, line: c.line, odds: c.odds, book: document.getElementById("mbook").value, stake,
         pModel: c.p, pFinal: c.p, ev: c.e, mean: sp.mean,
@@ -913,8 +940,9 @@ const dayShort = (k) => `${k.slice(6, 8)}/${k.slice(4, 6)}`;
 const initials = (name) => String(name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 const jState = { combine: false, sel: new Set() };
 const legIcon = (st) => ({ won: "✓", lost: "✗", push: "↺", void: "–", pending: "•" }[st] || "•");
-const legLine = (l) => `<div class="jleg ${l.status}"><span class="jleg-i">${legIcon(l.status)}</span><div class="grow ell">${l.kind === "team" ? `<b>${esc(l.label)}</b>${l.resultText ? ` <span class="muted">(${l.resultText})</span>` : ""}` : `<b>${esc(l.player)}</b> · ${esc(MARKETS[l.market]?.short || l.market)} ${l.side === "under" ? "Moins" : "Plus"} ${l.line}${l.result != null ? ` <span class="muted">(${l.result})</span>` : ""}`}</div><span class="num">${l.group ? `<span class="chip" title="MYCOMBI">MC ${f2(l.groupOdds)}</span>` : f2(l.odds)}</span></div>`;
-const betTitle = (b) => b.kind === "team" ? esc(b.label) : betTitle0(b);
+const legLine = (l) => `<div class="jleg ${l.status}"><span class="jleg-i">${legIcon(l.status)}</span><div class="grow ell">${l.h2h ? `<b>${esc(l.player)}</b> · plus de ${esc((MARKETS[l.market]?.label || "").toLowerCase())} que ${esc(l.opp || "?")}${l.resultText ? ` <span class="muted">(${l.resultText})</span>` : ""}` : l.kind === "team" ? `<b>${esc(l.label)}</b>${l.resultText ? ` <span class="muted">(${l.resultText})</span>` : ""}` : `<b>${esc(l.player)}</b> · ${esc(MARKETS[l.market]?.short || l.market)} ${l.side === "under" ? "Moins" : "Plus"} ${l.line}${l.result != null ? ` <span class="muted">(${l.result})</span>` : ""}`}</div><span class="num">${l.group ? `<span class="chip" title="MYCOMBI">MC ${f2(l.groupOdds)}</span>` : f2(l.odds)}</span></div>`;
+const betTitle = (b) => b.kind === "team" || b.h2h ? esc(b.label) : betTitle0(b);
+const h2hLabel = (player, market, opp) => `${player} plus de ${(MARKETS[market]?.label || market || "?").toLowerCase()} que ${opp || "?"}`;
 const betTitle0 = (b) => `${esc(MARKETS[b.market]?.label || b.market)} · ${b.side === "under" ? "Moins de" : "Plus de"} ${b.line}`;
 
 // Courbe du profit cumulé (SVG fait main).
@@ -1050,12 +1078,12 @@ function settledRow(b) {
     </div></details>`;
   }
   const unit = MARKETS[b.market]?.parts?.length === 1 ? ` ${MARKETS[b.market].short.toLowerCase()}` : "";
-  const res = b.kind === "team" ? (b.resultText ? `score <b>${b.resultText}</b>` : "réglé à la main") : b.result != null ? `<b>${b.result}${esc(unit)}</b> vs ${b.line}` : b.status === "void" ? "n'a pas joué" : "réglé à la main";
+  const res = b.kind === "team" || b.h2h ? (b.resultText ? `score <b>${b.resultText}</b>` : "réglé à la main") : b.result != null ? `<b>${b.result}${esc(unit)}</b> vs ${b.line}` : b.status === "void" ? "n'a pas joué" : "réglé à la main";
   const icon = { won: "✓", lost: "✗", push: "↺", void: "–" }[b.status] || "";
   return `<details class="jrow ${b.status}"><summary>
       <div class="jav st">${icon}</div>
       <div class="grow"><div class="jbet-name ell">${esc(b.player)}</div>
-        <div class="small ell">${b.kind === "team" ? esc(b.label) : `${esc(MARKETS[b.market]?.short || b.market)} ${b.side === "under" ? "Moins" : "Plus"} ${b.line}`} · <span class="muted">${res}</span></div></div>
+        <div class="small ell">${b.kind === "team" || b.h2h ? esc(b.label) : `${esc(MARKETS[b.market]?.short || b.market)} ${b.side === "under" ? "Moins" : "Plus"} ${b.line}`} · <span class="muted">${res}</span></div></div>
       <div class="jrow-r"><b class="num ${p > 0 ? "up" : p < 0 ? "down" : "muted"}">${b.status === "push" || b.status === "void" ? J_LABEL[b.status] : sEur(p)}</b><span class="small muted num">${eur(b.stake)} @ ${f2(b.odds)}</span></div>
     </summary>
     <div class="jrow-body">
@@ -1093,7 +1121,11 @@ async function resolveSlip(parsed) {
     } else {
       const g = games.find((x) => x.home.id === leg.playerTeamId || x.away.id === leg.playerTeamId);
       leg.game = g || null;
-      if (g) leg.pproj = (await getProjections(g.id).catch(() => null))?.players?.[leg.playerId] || null;
+      if (g) {
+        const pf = await getProjections(g.id).catch(() => null);
+        leg.pproj = pf?.players?.[leg.playerId] || null;
+        if (leg.h2h) leg.oproj = pf?.players?.[leg.oppId] || null;
+      }
     }
     leg.on = true;
     computeSlipLeg(leg);
@@ -1114,6 +1146,12 @@ function computeSlipLeg(leg) {
     leg.ok = !!leg.game && (leg.type === "ml" || Number.isFinite(x)) && leg.odds > 1;
     if (leg.ok && leg.tproj) leg.p = teamProb(leg.tproj, leg.game, bet);
   } else {
+    if (leg.h2h) {
+      leg.label = h2hLabel(leg.player, leg.market, leg.opp);
+      leg.ok = !!leg.game && !!MARKETS[leg.market] && !!leg.oppId && (leg.odds > 1 || leg.groupOdds > 1);
+      if (leg.ok && leg.pproj?.m?.[leg.market] && leg.oproj?.m?.[leg.market]) leg.p = h2hProb(statFromProj(leg.pproj, leg.market).dist, statFromProj(leg.oproj, leg.market).dist).win;
+      return leg;
+    }
     leg.label = `${leg.player} · ${MARKETS[leg.market]?.label || "?"} ${leg.side === "under" ? "Moins" : "Plus"} de ${leg.line ?? "?"}`;
     leg.ok = !!leg.game && !!MARKETS[leg.market] && Number.isFinite(Number(leg.line)) && (leg.odds > 1 || leg.groupOdds > 1);
     if (leg.ok && leg.pproj?.m?.[leg.market]) leg.p = probLine(statFromProj(leg.pproj, leg.market).dist, Number(leg.line))[leg.side || "over"];
@@ -1127,6 +1165,7 @@ function slipLegHTML(l, i) {
   const typeSel = l.kind === "team" ? `<select data-sl="${i}" data-k="type">${SLIP_TYPES.map(([k, n]) => `<option value="${k}"${l.type === k ? " selected" : ""}>${n}</option>`).join("")}</select>`
     : `<select data-sl="${i}" data-k="market">${Object.entries(MARKETS).map(([k, m]) => `<option value="${k}"${l.market === k ? " selected" : ""}>${m.label}</option>`).join("")}</select>`;
   const lineField = l.kind === "team" ? (l.type === "ml" ? "" : `<input type="number" inputmode="decimal" step="0.5" data-sl="${i}" data-k="x" value="${l.x ?? ""}" placeholder="X" class="${l.x == null ? "miss" : ""}">`)
+    : l.h2h ? `<span class="small" style="flex:1 1 30%;align-self:center">⚔️ Face à face vs <b>${esc(l.opp || "?")}</b></span>`
     : `<select data-sl="${i}" data-k="side"><option value="over"${l.side !== "under" ? " selected" : ""}>Plus de</option><option value="under"${l.side === "under" ? " selected" : ""}>Moins de</option></select><input type="number" inputmode="decimal" step="0.5" data-sl="${i}" data-k="line" value="${l.line ?? ""}" placeholder="ligne" class="${l.line == null ? "miss" : ""}">`;
   return `<div class="slipleg${l.on ? "" : " off"}">
     <label class="row" style="gap:8px;margin:0;color:inherit"><input type="checkbox" data-sl="${i}" data-k="on"${l.on ? " checked" : ""}><b class="grow">${esc(l.kind === "team" ? (l.team || "Équipe ?") : l.player)}</b><span class="small muted">${l.game ? esc(`${l.game.away.abbr} @ ${l.game.home.abbr}`) : "match introuvable"}</span></label>
@@ -1218,6 +1257,7 @@ function wireSlipFoot(again) {
         const base = { ...grp, eventId: g.id, season: seasonForDate(new Date(g.date)), gameDate: g.dateKey, matchup: `${g.away.abbr} @ ${g.home.abbr}`, odds: l.odds, book: slipState.book, stake, pModel: l.p, pFinal: l.p, ev: l.p != null ? l.p * l.odds - 1 : null };
         const b = l.kind === "team"
           ? journalAdd({ ...base, kind: "team", player: l.market === "total" ? `${g.away.abbr} @ ${g.home.abbr}` : l.team, playerId: "team", market: l.market, teamId: l.teamId || g.home.id, oppId: l.oppId || g.away.id, teamAbbr: l.teamAbbr, side: l.market === "total" ? l.side || "over" : null, line: l.line, label: l.label })
+          : l.h2h ? journalAdd({ ...base, playerId: l.playerId, player: l.player, market: l.market, h2h: true, oppId: l.oppId, opp: l.opp, label: l.label })
           : journalAdd({ ...base, playerId: l.playerId, player: l.player, market: l.market, side: l.side || "over", line: Number(l.line) });
         return b.id;
       });

@@ -85,3 +85,13 @@ test("evaluate : paliers (Over seul, sans Under)", () => {
   assert.ok(picks.every((x) => x.side === "over" && x.pMarket == null));
   assert.equal(picks[0].line, 24.5, "le palier à 2.40 a plus de value que celui à 1.01");
 });
+
+test("face à face : P(A > B) + égalité + P(A < B) = 1, symétrie", async () => {
+  const { h2hProb } = await import("../js/model.js");
+  const a = negBin(6, 1.5), b = negBin(4, 1.5);
+  const r = h2hProb(a, b);
+  assert.ok(Math.abs(r.win + r.tie + r.lose - 1) < 1e-6);
+  assert.ok(r.win > r.lose, "6 de moyenne bat 4 de moyenne plus souvent");
+  const same = h2hProb(a, a);
+  assert.ok(Math.abs(same.win - same.lose) < 1e-6);
+});

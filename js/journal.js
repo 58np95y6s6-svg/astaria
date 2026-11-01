@@ -26,6 +26,8 @@ export function addBet(b) {
   };
   // Sélection d'une MYCOMBI : pas de cote propre, la cote est celle du groupe.
   if (b.group) Object.assign(bet, { group: String(b.group), groupOdds: Number(b.groupOdds) || null, odds: b.odds > 1 ? Number(b.odds) : null });
+  // Face à face : le joueur doit faire mieux que l'adversaire sur la stat (égalité = remboursé).
+  if (b.h2h) Object.assign(bet, { h2h: true, oppId: String(b.oppId), opp: String(b.opp || ""), side: "h2h", line: null, label: String(b.label || "") });
   if (b.kind === "team") {
     // Pari équipe : vainqueur, handicap, total du match, total d'une équipe.
     Object.assign(bet, { kind: "team", teamId: b.teamId ?? null, oppId: b.oppId ?? null, teamAbbr: b.teamAbbr || null, label: String(b.label || ""),
@@ -120,8 +122,23 @@ async function settleTeam(b) {
   return true;
 }
 
+// Face à face : comparaison des stats réelles des deux joueurs sur le match.
+async function settleH2H(b) {
+  const core = await getCore(b.season);
+  if (!core?.processed?.[b.eventId]) return false;
+  const [la, lb] = await Promise.all([b.playerId, b.oppId].map(async (pid) => (await playerLogs(core, b.season, pid)).find((l) => l.e === b.eventId)));
+  b.settledAt = new Date().toISOString();
+  if (!la || !lb) { b.status = "void"; b.result = null; return true; } // un des deux n'a pas joué → remboursé
+  const va = valueOf(la, b.market), vb = valueOf(lb, b.market);
+  b.resultText = `${va} vs ${vb}`;
+  b.status = va > vb ? "won" : va < vb ? "lost" : "push";
+  b.auto = true;
+  return true;
+}
+
 // Règle un pari simple ou une sélection de combiné (même forme). Renvoie true si quelque chose a changé.
 async function settleOne(b) {
+  if (b.h2h) return settleH2H(b);
   if (b.kind === "team") return settleTeam(b);
   if (b.eventId === "manual" || b.playerId === "manual") return settleFree(b);
   const core = await getCore(b.season);
@@ -164,7 +181,7 @@ export async function settleAll() {
   return bets;
 }
 
-const LEG_FIELDS = ["group", "groupOdds", "kind", "teamId", "oppId", "teamAbbr", "label", "resultText", "scoreT", "scoreO", "player", "playerId", "eventId", "season", "gameDate", "matchup", "market", "side", "line", "odds", "book", "pFinal", "pModel", "status", "result", "settledAt"];
+const LEG_FIELDS = ["h2h", "oppId", "opp", "group", "groupOdds", "kind", "teamId", "oppId", "teamAbbr", "label", "resultText", "scoreT", "scoreO", "player", "playerId", "eventId", "season", "gameDate", "matchup", "market", "side", "line", "odds", "book", "pFinal", "pModel", "status", "result", "settledAt"];
 
 // Regroupe des paris simples en cours en un combiné (cote = produit des cotes).
 export function createCombo(ids, stake) {

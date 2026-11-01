@@ -42,6 +42,17 @@ function playerIn(text, players) {
   return best;
 }
 
+// Tous les joueurs connus cités dans un texte (pour « Face à Face : A vs B »).
+function playersAll(text, players) {
+  const n = ` ${norm(text).replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ")} `;
+  const out = [];
+  for (const [id, p] of Object.entries(players || {})) {
+    const pn = norm(p.name).replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+    if (pn.length > 4 && n.includes(` ${pn} `)) out.push({ id, name: p.name, teamId: p.teamId, at: n.indexOf(` ${pn} `) });
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+
 function statOf(t) {
   if (/points?\s*\+\s*rebonds?\s*\+\s*passes?|pts\s*\+\s*reb\s*\+\s*p/.test(t)) return "pra";
   if (/points?\s*\+\s*rebonds?/.test(t)) return "pr";
@@ -62,13 +73,27 @@ const SEL_RE = /^(.*?)\s*(\+|-|−|plus|moins)\s*de\s*(\d{1,2}(?:[,.]\d)?)(?!\d)
 function parsePlayerList(lines, players) {
   if (!players) return [];
   const legs = [];
-  let group = null, gn = 0;
+  let group = null, gn = 0, pendingSel = null;
   const oddsIn = (t) => { const m = [...String(t).matchAll(ODDS_RE)].map((x) => num(x[1])).filter((x) => x > 1 && x < 60); return m.length ? m[m.length - 1] : null; };
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i], n = norm(l);
     if (/€|cote\s*totale|gains?\s*possibles?|gains?\s*potentiels?/.test(n)) continue;
     if (/my ?combi|bet ?builder|meme match|same game/.test(n)) {
       group = { id: `g${++gn}`, odds: oddsIn(l) ?? (i + 1 < lines.length ? oddsIn(lines[i + 1]) : null) };
+      continue;
+    }
+    // Face à Face : « Nom » seul sur une ligne, puis « Nombre de passes - Face à Face : A vs B ».
+    const solo = playerIn(l, players);
+    const rest = solo ? norm(l).replace(/[^a-z ]+/g, " ").replace(norm(solo.name).replace(/[^a-z ]+/g, " "), " ").replace(/\s+/g, " ").trim() : null;
+    if (solo && (!rest || rest.length <= 3) && !SEL_RE.test(n)) { pendingSel = solo; continue; }
+    if (/face a face|duel|head to head/.test(n) && pendingSel) {
+      let ctxText = l;
+      if (i + 1 < lines.length && !/face a face/.test(norm(lines[i + 1])) && !TIME_RE.test(norm(lines[i + 1])) && !/^[+•*]/.test(lines[i + 1])) ctxText += " " + lines[++i];
+      const opp = playersAll(ctxText, players).find((p) => p.id !== pendingSel.id);
+      legs.push({ kind: "player", h2h: true, player: pendingSel.name, playerId: pendingSel.id, playerTeamId: pendingSel.teamId,
+        oppId: opp?.id || null, opp: opp?.name || null, market: statOf(n), side: "h2h", line: null,
+        odds: group ? null : oddsIn(ctxText), group: group?.id || null, groupOdds: group?.odds || null, text: ctxText, missing: opp ? [] : ["adversaire"] });
+      pendingSel = null;
       continue;
     }
     const m = SEL_RE.exec(n);
@@ -114,9 +139,19 @@ export function parseSlip(text, ctx = {}) {
   const book = /betclic|bet clic|befclic/.test(all) ? "betclic_fr" : /winamax|enregistres|completer|sport\s+poker/.test(all) ? "winamax_fr" : null;
   const totalM = /cote\s*totale[^a-z0-9]{0,6}(\d{1,3}[,.]\d{1,2})/.exec(all);
   const stakeM = /mise\D{0,8}(\d{1,4}(?:[,.]\d{1,2})?)\s*€/.exec(all);
+  const gainsM = /gains?\s*(?:possibles?|potentiels?)[^0-9]{0,8}(\d{1,5}(?:[,.]\d{1,2})?)/.exec(all);
+  const stake0 = stakeM ? num(stakeM[1]) : null;
+  const fromGains = gainsM && stake0 ? Math.round((num(gainsM[1]) / stake0) * 100) / 100 : null;
   if (pl.length) {
+    // Cote de groupe illisible (encadré jaune) : déduite des gains ÷ mise s'il n'y a qu'un groupe.
+    const groups = [...new Set(pl.filter((l) => l.group).map((l) => l.group))];
+    if (fromGains && groups.length === 1 && pl.every((l) => l.group || l.odds)) {
+      const others = legsOdds(pl.filter((l) => !l.group));
+      for (const l of pl) if (l.group && !l.groupOdds) l.groupOdds = Math.round((fromGains / others) * 100) / 100;
+    }
+    for (const l of pl) if (l.group && l.groupOdds) l.missing = l.missing.filter((x) => x !== "cote");
     const product = legsOdds(pl);
-    return { book, legs: pl, totalOdds: totalM ? num(totalM[1]) : product, product, stake: stakeM ? num(stakeM[1]) : null };
+    return { book, legs: pl, totalOdds: totalM ? num(totalM[1]) : fromGains || product, product, stake: stake0 };
   }
   // Lignes « rappel du match » (deux équipes, ou un horaire) : on les ignore.
   const isMatchLine = (l) => teamsIn(l).length >= 2 || TIME_RE.test(norm(l));

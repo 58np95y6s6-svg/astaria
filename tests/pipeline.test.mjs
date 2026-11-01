@@ -116,6 +116,12 @@ test("pipeline complet", async () => {
   assert.match(s1.resultText, /^\d+-\d+$/);
   assert.equal(s1.status, s1.scoreT > s1.scoreO ? "won" : s1.scoreT < s1.scoreO ? "lost" : "push");
   assert.equal(s2.status, "won");
+  // Face à face : Tatum (101) vs Holiday (102) sur le match 9002
+  const fa = j.addBet({ eventId: "9002", season: 2027, playerId: "101", player: "Jayson Tatum", market: "pts", h2h: true, oppId: "102", opp: "Jrue Holiday", label: "Tatum plus de points que Holiday", odds: 1.8 });
+  const f6 = (await j.settleAll()).find((b) => b.id === fa.id);
+  assert.match(f6.resultText, /^\d+ vs \d+$/);
+  const [va, vb] = f6.resultText.split(" vs ").map(Number);
+  assert.equal(f6.status, va > vb ? "won" : va < vb ? "lost" : "push");
   const T = await import("../js/team.js");
   assert.equal(T.gradeTeam({ market: "spread", line: 5.5 }, 100, 104), "won", "+5.5 : perd de 4 → gagné");
   assert.equal(T.gradeTeam({ market: "spread", line: -5.5 }, 104, 100), "lost", "−5.5 : gagne de 4 → perdu");

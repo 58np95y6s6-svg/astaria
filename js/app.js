@@ -1143,21 +1143,29 @@ function computeSlipLeg(leg) {
     leg.line = line;
     const bet = { market: leg.market, teamId: leg.teamId, side: leg.type === "total" ? leg.side || "over" : null, line };
     leg.label = leg.game ? teamLabel({ ...bet }, leg.game) : `${leg.team || "?"} · ${SLIP_TYPES.find((t) => t[0] === leg.type)?.[1] || ""}`;
-    leg.ok = !!leg.game && (leg.type === "ml" || Number.isFinite(x)) && leg.odds > 1;
+    leg.okBase = !!leg.game && (leg.type === "ml" || Number.isFinite(x));
+    leg.ok = leg.okBase && leg.odds > 1;
     if (leg.ok && leg.tproj) leg.p = teamProb(leg.tproj, leg.game, bet);
   } else {
     if (leg.h2h) {
       leg.label = h2hLabel(leg.player, leg.market, leg.opp);
-      leg.ok = !!leg.game && !!MARKETS[leg.market] && !!leg.oppId && (leg.odds > 1 || leg.groupOdds > 1);
+      leg.okBase = !!leg.game && !!MARKETS[leg.market] && !!leg.oppId;
+      leg.ok = leg.okBase && (leg.odds > 1 || leg.groupOdds > 1);
       if (leg.ok && leg.pproj?.m?.[leg.market] && leg.oproj?.m?.[leg.market]) leg.p = h2hProb(statFromProj(leg.pproj, leg.market).dist, statFromProj(leg.oproj, leg.market).dist).win;
       return leg;
     }
     leg.label = `${leg.player} · ${MARKETS[leg.market]?.label || "?"} ${leg.side === "under" ? "Moins" : "Plus"} de ${leg.line ?? "?"}`;
-    leg.ok = !!leg.game && !!MARKETS[leg.market] && Number.isFinite(Number(leg.line)) && (leg.odds > 1 || leg.groupOdds > 1);
+    leg.okBase = !!leg.game && !!MARKETS[leg.market] && Number.isFinite(Number(leg.line));
+    leg.ok = leg.okBase && (leg.odds > 1 || leg.groupOdds > 1);
     if (leg.ok && leg.pproj?.m?.[leg.market]) leg.p = probLine(statFromProj(leg.pproj, leg.market).dist, Number(leg.line))[leg.side || "over"];
   }
   return leg;
 }
+
+// Combiné complet dont la cote totale est connue : les cotes individuelles sont facultatives.
+const slipTotalCovers = () => !!slipState.total && slipState.legs?.length > 1 && slipState.legs.every((l) => l.on) && (slipState.combo || slipState.legs.some((l) => l.group));
+const legReady = (l) => l.ok || (l.okBase && slipTotalCovers());
+const legMissingOdds = (l) => !(l.odds > 1) && !(l.groupOdds > 1);
 
 function slipLegHTML(l, i) {
   const ev = l.p != null && l.odds > 1 && !l.group ? l.p * l.odds - 1 : null;
@@ -1169,8 +1177,8 @@ function slipLegHTML(l, i) {
     : `<select data-sl="${i}" data-k="side"><option value="over"${l.side !== "under" ? " selected" : ""}>Plus de</option><option value="under"${l.side === "under" ? " selected" : ""}>Moins de</option></select><input type="number" inputmode="decimal" step="0.5" data-sl="${i}" data-k="line" value="${l.line ?? ""}" placeholder="ligne" class="${l.line == null ? "miss" : ""}">`;
   return `<div class="slipleg${l.on ? "" : " off"}">
     <label class="row" style="gap:8px;margin:0;color:inherit"><input type="checkbox" data-sl="${i}" data-k="on"${l.on ? " checked" : ""}><b class="grow">${esc(l.kind === "team" ? (l.team || "Équipe ?") : l.player)}</b><span class="small muted">${l.game ? esc(`${l.game.away.abbr} @ ${l.game.home.abbr}`) : "match introuvable"}</span></label>
-    <div class="sliprow">${typeSel}${lineField}${l.group ? `<label class="small muted" style="flex:1 1 30%;margin:0;align-self:center">MYCOMBI · cote du groupe <input type="number" inputmode="decimal" step="0.01" data-sl="${i}" data-k="groupOdds" value="${l.groupOdds ?? ""}" class="${l.groupOdds ? "" : "miss"}" style="margin-top:4px"></label>` : `<input type="number" inputmode="decimal" step="0.01" data-sl="${i}" data-k="odds" value="${l.odds ?? ""}" placeholder="cote" class="odds-in${l.odds ? "" : " miss"}">`}</div>
-    <div class="small" data-slres="${i}">${esc(l.label)}${l.p != null ? ` · proba <b>${pct(l.p)}</b> · cote juste ${f2(1 / l.p)}${ev != null ? ` · <span class="chip ${t.cls}">${sgnPct(ev)}</span>` : ""}` : ""}${!l.ok ? ` · <span class="down">à compléter</span>` : ""}</div>
+    <div class="sliprow">${typeSel}${lineField}${l.group ? `<label class="small muted" style="flex:1 1 30%;margin:0;align-self:center">MYCOMBI · cote du groupe <input type="number" inputmode="decimal" step="0.01" data-sl="${i}" data-k="groupOdds" value="${l.groupOdds ?? ""}" class="${l.groupOdds ? "" : "miss"}" style="margin-top:4px"></label>` : `<input type="number" inputmode="decimal" step="0.01" data-sl="${i}" data-k="odds" value="${l.odds ?? ""}" placeholder="${slipTotalCovers() ? "cote (facultatif)" : "cote"}" class="odds-in${l.odds || slipTotalCovers() ? "" : " miss"}">`}</div>
+    <div class="small" data-slres="${i}">${esc(l.label)}${l.p != null ? ` · proba <b>${pct(l.p)}</b> · cote juste ${f2(1 / l.p)}${ev != null ? ` · <span class="chip ${t.cls}">${sgnPct(ev)}</span>` : ""}` : ""}${!legReady(l) ? ` · <span class="down">à compléter</span>` : ""}</div>
   </div>`;
 }
 
@@ -1178,7 +1186,7 @@ function slipFooterHTML() {
   const on = slipState.legs.filter((l) => l.on);
   const prod = legsOdds(on);
   const pAll = on.length && on.every((l) => l.p != null) ? on.reduce((t, l) => t * l.p, 1) : null;
-  const odds = (slipState.combo || on.some((l) => l.group)) && on.length > 1 ? (slipState.total && Math.abs(slipState.total - prod) < 0.15 ? slipState.total : Math.round(prod * 100) / 100) : null;
+  const odds = (slipState.combo || on.some((l) => l.group)) && on.length > 1 ? (slipState.total && (slipTotalCovers() || Math.abs(slipState.total - prod) < 0.15) ? slipState.total : Math.round(prod * 100) / 100) : null;
   return `<div class="row wrap" style="gap:10px;margin-top:10px">
       <select id="slipBook" style="flex:1"><option value="betclic_fr"${slipState.book === "betclic_fr" ? " selected" : ""}>Betclic</option><option value="winamax_fr"${slipState.book === "winamax_fr" ? " selected" : ""}>Winamax</option></select>
       <input type="number" inputmode="decimal" step="0.5" id="slipStake" placeholder="Mise (€)" value="${esc(slipState.stake)}" style="flex:1">
@@ -1244,7 +1252,7 @@ function wireSlipFoot(again) {
   });
   document.getElementById("slipAdd")?.addEventListener("click", () => {
     const on = slipState.legs.filter((l) => l.on);
-    const bad = on.filter((l) => !l.ok);
+    const bad = on.filter((l) => !legReady(l));
     if (!on.length) { toast("Aucune sélection cochée"); return; }
     if (bad.length) { toast("Complète les sélections en rouge (ou décoche-les)"); return; }
     const stake = parseFloat(String(slipState.stake).replace(",", ".")) || 1;
@@ -1264,7 +1272,7 @@ function wireSlipFoot(again) {
       if (combo) {
         const c = createCombo(ids, stake);
         const prod = legsOdds(on);
-        if (slipState.total && Math.abs(slipState.total - prod) < 0.15) updateBet(c.id, { odds: slipState.total });
+        if (slipState.total && (on.some(legMissingOdds) || Math.abs(slipState.total - prod) < 0.15)) updateBet(c.id, { odds: slipState.total });
       }
       Object.assign(slipState, { legs: null, status: "" });
       toast(combo ? `Combiné ajouté ✓ (${on.length} sélections)` : `${on.length} pari${on.length > 1 ? "s" : ""} ajouté${on.length > 1 ? "s" : ""} ✓`);

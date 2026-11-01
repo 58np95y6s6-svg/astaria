@@ -21,7 +21,7 @@ export function addBet(b) {
     id: (crypto.randomUUID?.() || String(Date.now() + Math.random())), createdAt: new Date().toISOString(), status: "pending",
     eventId: String(b.eventId), season: Number(b.season), gameDate: b.gameDate || null, matchup: String(b.matchup || ""),
     playerId: String(b.playerId), player: String(b.player), market: b.market, side: b.side === "under" ? "under" : "over",
-    line: Number(b.line), odds: Number(b.odds), book: b.book || "manual", stake: Number(b.stake) || 1,
+    line: Number(b.line), odds: b.odds > 1 ? Number(b.odds) : null, book: b.book || "manual", stake: Number(b.stake) || 1,
     pModel: b.pModel ?? null, pFinal: b.pFinal ?? null, ev: b.ev ?? null, mean: b.mean ?? null,
   };
   // Sélection d'une MYCOMBI : pas de cote propre, la cote est celle du groupe.
@@ -155,6 +155,8 @@ export function comboOutcome(legs) {
   if (legs.some((l) => l.status === "pending")) return { status: "pending", odds: null };
   const won = legs.filter((l) => l.status === "won");
   if (!won.length) return { status: "push", odds: 1 };
+  // Cotes individuelles inconnues (import d'un combiné) : on garde la cote totale du ticket.
+  if (legs.some((l) => !l.group && !(l.odds > 1))) return { status: "won", odds: null };
   return { status: "won", odds: legsOdds(won) };
 }
 

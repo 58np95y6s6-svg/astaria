@@ -11,7 +11,6 @@ export const PLACES = [
   { id: "millau", name: "le viaduc de Millau", short: "Viaduc de Millau", where: "Aveyron", flag: "🇫🇷", km: 2.46, scene: "bridge", color: "#f2f2f2", valley: true, quip: "Au-dessus des nuages, ou presque." },
   { id: "goldengate", name: "le Golden Gate Bridge", short: "Golden Gate", where: "San Francisco", flag: "🇺🇸", km: 2.74, scene: "bridge", color: "#d2412f" },
   { id: "croisette", name: "la Croisette", short: "La Croisette", where: "Cannes", flag: "🇫🇷", km: 2.8, scene: "coast", quip: "Tapis rouge non fourni." },
-  { id: "re", name: "le pont de l'île de Ré", short: "Pont de l'île de Ré", where: "La Rochelle", flag: "🇫🇷", km: 2.93, scene: "bridge", color: "#d9d4ca" },
   { id: "monaco", laps: "du circuit de Monaco", name: "le circuit de Monaco", short: "Circuit de Monaco", where: "Monte-Carlo", flag: "🇲🇨", km: 3.337, scene: "circuit", sea: true, quip: "Un peu moins vite qu'une F1." },
   { id: "centralpark", name: "Central Park", short: "Central Park", where: "New York", flag: "🇺🇸", km: 4.0, scene: "park" },
   { id: "copacabana", name: "la plage de Copacabana", short: "Copacabana", where: "Rio de Janeiro", flag: "🇧🇷", km: 4.0, scene: "coast", sand: "#f3e3b8", quip: "Version tapis, sans le sable." },
@@ -54,7 +53,6 @@ export const PLACES = [
   { id: "karting", laps: "de piste de karting", short: "Piste de karting", where: "Karting du coin", flag: "🏎️", km: 1.0, scene: "circuit", alt: 5, quip: "Sans se faire doubler par un enfant de 10 ans." },
 
   // --- Tours de terrain / aller-retours ---
-  { id: "poolar", laps: "en piscine olympique", one: "aller-retour", many: "aller-retours", short: "Aller-retours piscine", where: "Bassin de 50 m", flag: "🏊", km: 0.1, scene: "pool", quip: "Bonnet de bain non obligatoire." },
   { id: "foottour", laps: "de terrain de foot", short: "Tours de terrain de foot", where: "105 × 68 m", flag: "⚽", km: 0.346, scene: "field", field: "foot", quip: "Échauffement validé, coach." },
   { id: "rugbytour", laps: "de terrain de rugby", short: "Tours de terrain de rugby", where: "en-buts compris", flag: "🏉", km: 0.428, scene: "field", field: "rugby", quip: "Sans plaquage." },
   { id: "baskettour", laps: "de terrain de basket", short: "Tours de terrain de basket", where: "28 × 15 m", flag: "🏀", km: 0.086, scene: "field", field: "basket", quip: "Le banc de touche te regarde." },
@@ -75,7 +73,6 @@ export const PLACES = [
   { id: "basket", count: true, plural: "terrains de basket", short: "Terrains de basket", flag: "🏀", km: 0.028, glyph: "basket", bg: "#3b3f5e", quip: "Swish." },
   { id: "a380", count: true, plural: "Airbus A380 nez à queue", short: "Airbus A380", flag: "✈️", km: 0.0727, glyph: "plane", bg: "#7a8796", quip: "Embarquement immédiat." },
   { id: "statue", count: true, plural: "statues de la Liberté empilées", short: "Statue de la Liberté", flag: "🗽", km: 0.093, glyph: "statue", bg: "#bfe0d8", quip: "Flambeau compris." },
-  { id: "sprint", count: true, plural: "sprints de 100 m façon Usain Bolt", short: "100 m d'Usain Bolt", flag: "⚡", km: 0.1, scene: "stadium", straight: true, quip: "Lui en 9''58. Toi, à ton rythme." },
   { id: "foot", count: true, plural: "terrains de foot", short: "Terrains de foot", flag: "⚽", km: 0.105, glyph: "foot", bg: "#4f8a3c", quip: "Et pas un seul carton." },
   { id: "tgv", count: true, plural: "rames de TGV", short: "Rames de TGV", flag: "🚄", km: 0.2, glyph: "tgv", bg: "#c9c3b8", quip: "Sans retard, toi." },
   { id: "titanic", count: true, plural: "Titanic bout à bout", short: "Titanic", flag: "🚢", km: 0.269, glyph: "ship", bg: "#25628e", quip: "Aucun iceberg en vue." },

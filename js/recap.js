@@ -2,37 +2,63 @@
 
 // Calories moyennes (valeurs usuelles, arrondies) — pas besoin d'API : ça marche hors connexion.
 export const FOODS = [
+  // Fast-food
   { id: "bigmac", e: "🍔", one: "Big Mac", many: "Big Mac", kcal: 503, fav: true },
+  { id: "whopper", e: "🍔", one: "Whopper", many: "Whopper", kcal: 660, fav: true },
+  { id: "bigtasty", e: "🍔", one: "Big Tasty", many: "Big Tasty", kcal: 840, fav: true },
+  { id: "cheese", e: "🍔", one: "cheeseburger", many: "cheeseburgers", kcal: 300, fav: true },
+  { id: "nuggets", e: "🍗", one: "boîte de 9 nuggets", many: "boîtes de 9 nuggets", kcal: 390, fav: true },
+  { id: "bucket", e: "🍗", one: "bucket de poulet frit", many: "buckets de poulet frit", kcal: 1100, fav: true },
+  { id: "frites", e: "🍟", one: "grande frite", many: "grandes frites", kcal: 440, fav: true },
+  { id: "mcflurry", e: "🍦", one: "McFlurry", many: "McFlurry", kcal: 340, fav: true },
+  { id: "sundae", e: "🍨", one: "sundae caramel", many: "sundaes caramel", kcal: 340, fav: true },
+  { id: "kebab", e: "🥙", one: "kebab-frites", many: "kebabs-frites", kcal: 1100, fav: true },
+  { id: "tacos", e: "🌮", one: "French tacos", many: "French tacos", kcal: 1100, fav: true },
+  { id: "pizza", e: "🍕", one: "pizza entière", many: "pizzas entières", kcal: 1800, fav: true },
+  { id: "pizzapart", e: "🍕", one: "part de pizza", many: "parts de pizza", kcal: 285, fav: true },
+  { id: "hotdog", e: "🌭", one: "hot-dog", many: "hot-dogs", kcal: 290, fav: true },
+  { id: "donut", e: "🍩", one: "donut glacé", many: "donuts glacés", kcal: 260, fav: true },
+  { id: "popcorn", e: "🍿", one: "seau de pop-corn au ciné", many: "seaux de pop-corn au ciné", kcal: 500, fav: true },
+
+  // Sodas & boissons énergisantes
+  { id: "coca", e: "🥤", one: "canette de Coca", many: "canettes de Coca", kcal: 139, fav: true },
+  { id: "orangina", e: "🍊", one: "Orangina", many: "Orangina", kcal: 140, fav: true },
+  { id: "icetea", e: "🧃", one: "canette d'Ice Tea", many: "canettes d'Ice Tea", kcal: 66, fav: true },
+  { id: "redbull", e: "⚡", one: "Red Bull", many: "Red Bull", kcal: 112, fav: true },
+  { id: "monster", e: "🟢", one: "Monster", many: "Monster", kcal: 240, fav: true },
+  { id: "milkshake", e: "🥤", one: "milkshake", many: "milkshakes", kcal: 480, fav: true },
+  { id: "biere", e: "🍺", one: "pinte de bière", many: "pintes de bière", kcal: 250, fav: true },
+  { id: "spritz", e: "🍹", one: "Spritz", many: "Spritz", kcal: 160, fav: true },
+
+  // Gâteaux, pâtisseries & biscuits connus
   { id: "croissant", e: "🥐", one: "croissant", many: "croissants", kcal: 230, fav: true },
-  { id: "painchoc", e: "🍫", one: "pain au chocolat", many: "pains au chocolat", kcal: 280, fav: true },
-  { id: "pizza", e: "🍕", one: "part de pizza", many: "parts de pizza", kcal: 285 },
-  { id: "frites", e: "🍟", one: "cornet de frites", many: "cornets de frites", kcal: 340 },
-  { id: "donut", e: "🍩", one: "donut", many: "donuts", kcal: 260 },
+  { id: "painchoc", e: "🥐", one: "pain au chocolat", many: "pains au chocolat", kcal: 280, fav: true },
+  { id: "eclair", e: "🍫", one: "éclair au chocolat", many: "éclairs au chocolat", kcal: 260, fav: true },
+  { id: "parisbrest", e: "🍩", one: "Paris-Brest", many: "Paris-Brest", kcal: 450, fav: true },
+  { id: "millefeuille", e: "🍰", one: "mille-feuille", many: "mille-feuilles", kcal: 400, fav: true },
+  { id: "macaron", e: "🍬", one: "macaron", many: "macarons", kcal: 90, fav: true },
   { id: "fondant", e: "🍰", one: "part de fondant au chocolat", many: "parts de fondant au chocolat", kcal: 370 },
+  { id: "galette", e: "👑", one: "part de galette des rois", many: "parts de galette des rois", kcal: 400 },
   { id: "crepe", e: "🥞", one: "crêpe au Nutella", many: "crêpes au Nutella", kcal: 300, fav: true },
   { id: "nutella", e: "🥄", one: "cuillère de Nutella", many: "cuillères de Nutella", kcal: 80 },
-  { id: "coca", e: "🥤", one: "canette de Coca", many: "canettes de Coca", kcal: 139 },
-  { id: "biere", e: "🍺", one: "pinte de bière", many: "pintes de bière", kcal: 250, fav: true },
-  { id: "vin", e: "🍷", one: "verre de vin", many: "verres de vin", kcal: 125 },
-  { id: "champagne", e: "🥂", one: "coupe de champagne", many: "coupes de champagne", kcal: 85 },
-  { id: "banane", e: "🍌", one: "banane", many: "bananes", kcal: 105 },
-  { id: "pomme", e: "🍎", one: "pomme", many: "pommes", kcal: 80 },
+  { id: "oreo", e: "🍪", one: "Oreo", many: "Oreo", kcal: 53, fav: true },
+  { id: "prince", e: "🍪", one: "Prince", many: "Prince", kcal: 70, fav: true },
   { id: "cookie", e: "🍪", one: "cookie", many: "cookies", kcal: 200 },
-  { id: "glace", e: "🍨", one: "boule de glace", many: "boules de glace", kcal: 140 },
-  { id: "kebab", e: "🥙", one: "kebab", many: "kebabs", kcal: 900, fav: true },
-  { id: "tacos", e: "🌮", one: "French tacos", many: "French tacos", kcal: 1100, fav: true },
+  { id: "bueno", e: "🍫", one: "Kinder Bueno", many: "Kinder Bueno", kcal: 244, fav: true },
+  { id: "snickers", e: "🍫", one: "Snickers", many: "Snickers", kcal: 250, fav: true },
+  { id: "kitkat", e: "🍫", one: "KitKat", many: "KitKat", kcal: 210, fav: true },
+  { id: "twix", e: "🍫", one: "Twix", many: "Twix", kcal: 250, fav: true },
+  { id: "haribo", e: "🐻", one: "sachet de Haribo", many: "sachets de Haribo", kcal: 340, fav: true },
+  { id: "pringles", e: "🥫", one: "tube de Pringles", many: "tubes de Pringles", kcal: 900, fav: true },
+  { id: "chocolat", e: "🍫", one: "carré de chocolat", many: "carrés de chocolat", kcal: 55 },
+
+  // Plats & classiques
   { id: "raclette", e: "🧀", one: "assiette de raclette", many: "assiettes de raclette", kcal: 1000, fav: true },
   { id: "tartiflette", e: "🥔", one: "part de tartiflette", many: "parts de tartiflette", kcal: 800 },
   { id: "croque", e: "🥪", one: "croque-monsieur", many: "croque-monsieur", kcal: 400 },
-  { id: "chocolat", e: "🍫", one: "carré de chocolat", many: "carrés de chocolat", kcal: 55 },
   { id: "baguette", e: "🥖", one: "baguette entière", many: "baguettes entières", kcal: 710 },
   { id: "sushi", e: "🍣", one: "sushi", many: "sushis", kcal: 45 },
-  { id: "galette", e: "👑", one: "part de galette des rois", many: "parts de galette des rois", kcal: 400 },
-  { id: "hotdog", e: "🌭", one: "hot-dog", many: "hot-dogs", kcal: 290 },
-  { id: "popcorn", e: "🍿", one: "pot de pop-corn au ciné", many: "pots de pop-corn au ciné", kcal: 500 },
-  { id: "cupcake", e: "🧁", one: "cupcake", many: "cupcakes", kcal: 300 },
-  { id: "avocat", e: "🥑", one: "avocado toast", many: "avocado toasts", kcal: 300 },
-  { id: "burrito", e: "🌯", one: "burrito", many: "burritos", kcal: 700 },
+  { id: "banane", e: "🍌", one: "banane", many: "bananes", kcal: 105 },
 ];
 
 const hash = (s) => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
@@ -53,10 +79,12 @@ export function foodFor(kcal, seed = "", max = 3) {
   if (!ok.length) return [];
   const h = hash(seed);
   // Aléatoire stable + bonus aux classiques + bonus aux quantités « parlantes » (2 à 30)
-  const score = (x) => (hash(x.f.id + h) % 100) - (x.f.fav ? 25 : 0) - (x.n >= 2 && x.n <= 30 ? 35 : 0);
+  const score = (x) => (hash(x.f.id + h) % 100) - (x.f.fav ? 45 : 0) - (x.n >= 2 && x.n <= 30 ? 35 : 0);
   ok.sort((a, b) => score(a) - score(b));
   const out = [], used = new Set();
   for (const x of ok) { if (used.has(x.f.e)) continue; used.add(x.f.e); out.push(x); if (out.length >= max) break; }
+  // Pas assez d'emojis différents : on complète sans ce critère.
+  for (const x of ok) { if (out.length >= max) break; if (!out.includes(x)) out.push(x); }
   return out;
 }
 

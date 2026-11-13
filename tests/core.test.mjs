@@ -64,3 +64,29 @@ test("carte « Exercices » du Résumé Santé (vraie capture, OCR brut)", () =>
 test("marche extérieure reste extérieure", () => {
   assert.equal(parseWorkoutText("Marche en extérieur\n1:02:00\n5,1 km").type, "walk_out");
 });
+
+import { parseSegments, segmentsKm, segmentsText } from "../js/core.js";
+test("paliers de vitesse : « 5 min à 3,5 puis 40min à 6 »", () => {
+  const segs = parseSegments("5 min à 3,5 puis 40min à 6");
+  assert.deepEqual(segs, [{ min: 5, speed: 3.5 }, { min: 40, speed: 6 }]);
+  assert.equal(Math.round(segmentsKm(segs) * 1000) / 1000, 4.292);
+  assert.deepEqual(parseSegments("10' @ 4.5 km/h, 20 mn a 5,5km/h"), [{ min: 10, speed: 4.5 }, { min: 20, speed: 5.5 }]);
+  assert.equal(segmentsText(segs), "5 min à 3,5 puis 40 min à 6");
+  const c = corrected({ type: "walk_treadmill", watchKm: 2.9, durationSec: 45 * 60, segments: segs });
+  assert.equal(c.km, 4.29);
+  assert.equal(c.source, "paliers");
+  // La distance réelle saisie prime toujours.
+  assert.equal(corrected({ type: "walk_treadmill", watchKm: 2.9, realKm: 4, durationSec: 2700, segments: segs }).km, 4);
+});
+
+import { placesFor, ratioText, nextChallenge, placeSVG, PLACES } from "../js/places.js";
+test("comparaison à un lieu connu", () => {
+  const best = placesFor(4.35)[0];
+  assert.ok(best.ratio > 0.5 && best.ratio < 2.5, best.place.id);
+  assert.deepEqual(ratioText(2.9 / 2.74, PLACES.find((p) => p.id === "goldengate")), { big: "1,1×", line: "le Golden Gate Bridge" });
+  assert.deepEqual(ratioText(0.8, PLACES.find((p) => p.id === "wall")), { big: "80 %", line: "de la Grande Muraille de Chine" });
+  assert.equal(ratioText(0.5, PLACES.find((p) => p.id === "centralpark")).line, "de Central Park");
+  assert.equal(ratioText(0.5, PLACES.find((p) => p.id === "champs")).line, "des Champs-Élysées");
+  assert.equal(nextChallenge(50).place.id, "tmb");
+  for (const p of PLACES) assert.match(placeSVG(p, 0.4), /^<svg/);
+});

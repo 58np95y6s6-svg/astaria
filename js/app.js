@@ -1,4 +1,6 @@
-import { ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey } from "./core.js";
+import { ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
+import { PLACES, placesFor, placeSVG, ratioText, nextChallenge } from "./places.js";
+import { renderStory, shareBlob } from "./story.js";
 import { loadWorkouts, loadSettings, saveSettings, upsertWorkout, deleteWorkout, exportAll, importAll } from "./store.js";
 import { ocrImage } from "./ocr.js";
 
@@ -42,7 +44,7 @@ function router() {
 window.addEventListener("hashchange", router);
 
 // ---------- formulaire de séance (ajout / modification) ----------
-const emptyDraft = () => ({ type: "walk_treadmill", date: localInput(Date.now()), min: "", sec: "", watchKm: "", realKm: "", kcalActive: "", kcalTotal: "", hrAvg: "", note: "" });
+const emptyDraft = () => ({ type: "walk_treadmill", date: localInput(Date.now()), min: "", sec: "", watchKm: "", realKm: "", segText: "", kcalActive: "", kcalTotal: "", hrAvg: "", note: "" });
 let draft = emptyDraft();
 let addOpen = false;
 let openId = null; // séance dépliée dans la liste
@@ -61,21 +63,25 @@ function fromParsed(p) {
 }
 
 function draftToWorkout(d) {
-  const durationSec = (numIn(d.min) || 0) * 60 + (numIn(d.sec) || 0);
+  const segments = parseSegments(d.segText);
+  const durationSec = (numIn(d.min) || 0) * 60 + (numIn(d.sec) || 0) || Math.round(segmentsMin(segments) * 60);
   return {
     id: d.id, type: d.type, date: new Date(d.date || Date.now()).toISOString(), durationSec,
-    watchKm: numIn(d.watchKm), realKm: numIn(d.realKm), kcalActive: numIn(d.kcalActive), kcalTotal: numIn(d.kcalTotal),
+    watchKm: numIn(d.watchKm), realKm: numIn(d.realKm), segments: segments.length ? segments : undefined, placeId: d.placeId, kcalActive: numIn(d.kcalActive), kcalTotal: numIn(d.kcalTotal),
     hrAvg: numIn(d.hrAvg), note: String(d.note || "").slice(0, 200),
   };
 }
 
 function previewHTML(d) {
   const w = draftToWorkout(d);
-  if (!(w.durationSec > 0) || !(w.watchKm > 0 || w.realKm > 0)) return `<div class="small muted">Renseigne au moins la durée et la distance de la montre.</div>`;
+  const segs = w.segments || [];
+  const segInfo = segs.length ? `<div class="seg-prev">${segProfile(segs)}<div class="small"><b>${km(segmentsKm(segs))}</b> d'après les paliers · ${fmtDuration(segmentsMin(segs) * 60)}${w.durationSec && Math.abs(segmentsMin(segs) * 60 - w.durationSec) > 90 ? ` <span class="down">(durée saisie : ${fmtDuration(w.durationSec)})</span>` : ""}</div></div>` : "";
+  if (!(w.durationSec > 0) || !(w.watchKm > 0 || w.realKm > 0 || segs.length)) return segInfo + `<div class="small muted">Renseigne au moins la durée et la distance de la montre (ou tes paliers de vitesse).</div>`;
   const c = corrected(w, settings);
   return `<div class="row between"><div><div class="small muted">Distance retenue</div><div class="big num">${km(c.km)}</div></div>
-    <div style="text-align:right"><div class="small muted">Allure · vitesse</div><div class="big num" style="font-size:20px">${fmtPace(c.paceSec)}</div><div class="small num">${c.speed ?? "–"} km/h</div></div></div>
-    <div class="small muted" style="margin-top:6px">${c.source === "réel" ? `Distance réelle saisie (montre ${km(w.watchKm)}, rapport ×${c.factor.toLocaleString("fr-FR")})`
+    <div style="text-align:right"><div class="small muted">Allure · vitesse</div><div class="big num" style="font-size:20px">${fmtPace(c.paceSec)}</div><div class="small num">${c.speed != null ? c.speed.toLocaleString("fr-FR") : "–"} km/h</div></div></div>
+    ${segInfo}
+    <div class="small muted" style="margin-top:6px">${c.source === "paliers" ? `Calculée avec tes paliers de vitesse${w.watchKm ? ` (montre ${km(w.watchKm)}, rapport ×${c.factor.toLocaleString("fr-FR")})` : ""}` : c.source === "réel" ? `Distance réelle saisie (montre ${km(w.watchKm)}, rapport ×${c.factor.toLocaleString("fr-FR")})`
       : c.source === "corrigé" ? `Montre ${km(w.watchKm)} × ${c.factor.toLocaleString("fr-FR")} (correction ${esc(ACTIVITIES[w.type].label.toLowerCase())})` : "Distance de la montre, sans correction"}</div>`;
 }
 
@@ -88,6 +94,7 @@ function formHTML(d, p) {
       <div class="full"><label>Durée totale</label><div class="dur"><input type="text" inputmode="numeric" autocomplete="off" data-f="${p}" data-k="min" value="${esc(d.min)}" placeholder="min"><span>min</span><input type="text" inputmode="numeric" autocomplete="off" data-f="${p}" data-k="sec" value="${esc(d.sec)}" placeholder="s"><span>s</span></div></div>
       ${f("watchKm", "Distance montre (km)", "0,80")}
       ${f("realKm", "Distance réelle (facultatif)", "tapis")}
+      <div class="full"><label>Paliers de vitesse du tapis (facultatif)</label><input type="text" inputmode="text" autocomplete="off" autocapitalize="off" data-f="${p}" data-k="segText" value="${esc(d.segText)}" placeholder="5 min à 3,5 puis 40 min à 6"></div>
       ${f("kcalActive", "Kcal actives", "96")}
       ${f("kcalTotal", "Kcal totales (facultatif)", "")}
       ${f("hrAvg", "FC moyenne (facultatif)", "bpm", "full")}
@@ -119,13 +126,98 @@ function workoutCard(w) {
       <div><b class="num">${fmtPace(c.paceSec).replace(" /km", "")}</b><span>allure /km</span></div>
       <div><b class="num">${int(w.kcalActive)}</b><span>kcal</span></div>
     </div>
+    ${compareStrip(w, c)}
     ${open ? `<div class="wk-body" data-stop>
-      <div class="small muted">${c.speed ?? "–"} km/h${w.kcalTotal ? ` · ${int(w.kcalTotal)} kcal totales` : ""}${w.hrAvg ? ` · FC moy. ${int(w.hrAvg)} bpm` : ""}</div>
+      ${w.segments?.length ? `<div class="seg-prev" style="margin-top:0">${segProfile(w.segments)}<div class="small muted">${esc(segmentsText(w.segments))} km/h</div></div>` : ""}
+      <div class="small muted">${c.speed != null ? c.speed.toLocaleString("fr-FR") : "–"} km/h${w.kcalTotal ? ` · ${int(w.kcalTotal)} kcal totales` : ""}${w.hrAvg ? ` · FC moy. ${int(w.hrAvg)} bpm` : ""}</div>
       <h3>Modifier</h3>${formHTML(editDraft, "edit")}
-      ${editDraft.realKm && editDraft.watchKm ? `<button class="link" data-learn style="margin-top:10px">Utiliser ce rapport pour toutes les « ${esc(a.label.toLowerCase())} »</button>` : ""}
+      ${(editDraft.realKm || editDraft.segText) && editDraft.watchKm && c.source !== "corrigé" ? `<button class="link" data-learn style="margin-top:10px">Utiliser ce rapport pour toutes les « ${esc(a.label.toLowerCase())} »</button>` : ""}
       <div class="row" style="margin-top:12px"><button class="btn primary grow" data-save>Enregistrer</button><button class="btn" data-del>Supprimer</button></div>
     </div>` : ""}
   </div>`;
+}
+
+// ---------- Comparaison à un lieu connu ----------
+function compareFor(w, c) {
+  const list = placesFor(c.km);
+  const chosen = w.placeId && list.find((x) => x.place.id === w.placeId);
+  return chosen || list[0];
+}
+function compareStrip(w, c) {
+  if (!(c.km > 0)) return "";
+  const { place, ratio } = compareFor(w, c);
+  const rt = ratioText(ratio, place);
+  return `<div class="cmp">
+    <div class="cmp-img">${placeSVG(place, ratio, { id: `t${w.id}` })}</div>
+    <div class="grow"><div class="small muted">L'équivalent de</div><b class="cmp-big">${esc(rt.big)}</b> <span class="cmp-line">${esc(rt.line)}</span></div>
+    <button class="story-btn" data-story="${w.id}" aria-label="Partager en story">${IG}</button>
+  </div>`;
+}
+const IG = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>`;
+
+function segProfile(segs) {
+  const tot = segmentsMin(segs) || 1, max = Math.max(...segs.map((s) => s.speed), 1);
+  let x = 0;
+  return `<svg class="seg-chart" viewBox="0 0 300 64" preserveAspectRatio="none" role="img" aria-label="Paliers de vitesse">${segs.map((s) => {
+    const w = (s.min / tot) * 300, h = 14 + (s.speed / max) * 40, r = `<rect x="${(x + 1).toFixed(1)}" y="${(64 - h).toFixed(1)}" width="${Math.max(2, w - 2).toFixed(1)}" height="${h.toFixed(1)}" rx="6" fill="url(#sg)"/>
+      ${w > 40 ? `<text x="${(x + w / 2).toFixed(1)}" y="${(64 - h + 15).toFixed(1)}" text-anchor="middle">${String(s.speed).replace(".", ",")}</text>` : ""}`;
+    x += w; return r;
+  }).join("")}<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4555a"/><stop offset="1" stop-color="#ff9a7a"/></linearGradient></defs></svg>`;
+}
+
+const dateStory = (d) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+
+function openWorkoutStory(w) {
+  const c = corrected(w, settings);
+  const a = ACTIVITIES[w.type] || ACTIVITIES.other;
+  const first = compareFor(w, c);
+  const cands = [first, ...placesFor(c.km).filter((x) => x.place.id !== first.place.id)];
+  openStory(cands, (cand) => ({
+    place: cand.place, ratio: cand.ratio, date: dateStory(w.date),
+    kicker: "Aujourd'hui j'ai parcouru l'équivalent de",
+    subtitle: `${km(c.km)} · ${a.label.toLowerCase()}`,
+    stats: [[km(c.km, c.km >= 10 ? 1 : 2).replace(" km", ""), "km"], [fmtDuration(w.durationSec), "durée"], [fmtPace(c.paceSec).replace(" /km", ""), "allure /km"], [int(w.kcalActive), "kcal"]],
+  }), (cand) => { upsertWorkout({ ...w, placeId: cand.place.id }); if ((location.hash || "#/") === "#/") viewHome(); });
+}
+
+// Fenêtre « story » : aperçu, autre lieu, partager.
+function openStory(cands, build, onPick) {
+  let i = 0, blob = null, url = null, busy = false;
+  const el = document.createElement("div");
+  el.className = "modal";
+  el.innerHTML = `<div class="modal-sheet">
+      <div class="row between"><b style="font-size:17px">Story Instagram</b><button class="icon-close" data-x aria-label="Fermer">✕</button></div>
+      <div class="story-frame"><div class="loader">Création de l'image…</div></div>
+      <div class="place-chips"></div>
+      <button class="btn primary block" data-share disabled>${IG} Partager en story</button>
+      <div class="small muted" style="text-align:center;margin-top:8px">Dans la feuille de partage, choisis <b>Instagram</b> → <b>Story</b>.</div>
+    </div>`;
+  document.body.appendChild(el);
+  const close = () => { el.remove(); if (url) URL.revokeObjectURL(url); };
+  el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-x]")) close(); });
+  const chips = el.querySelector(".place-chips");
+  const drawChips = () => {
+    chips.innerHTML = cands.slice(0, 8).map((x, j) => `<button class="pchip${j === i ? " on" : ""}" data-pi="${j}">${x.place.flag} ${esc(x.place.short)}</button>`).join("");
+    chips.querySelectorAll("[data-pi]").forEach((b) => b.addEventListener("click", () => { if (busy) return; i = +b.dataset.pi; onPick?.(cands[i]); draw(); }));
+  };
+  const draw = async () => {
+    busy = true; drawChips();
+    const btn = el.querySelector("[data-share]"); btn.disabled = true;
+    try {
+      blob = await renderStory(build(cands[i]));
+      if (url) URL.revokeObjectURL(url);
+      url = URL.createObjectURL(blob);
+      el.querySelector(".story-frame").innerHTML = `<img src="${url}" alt="Aperçu de la story">`;
+      btn.disabled = false;
+    } catch (e) { el.querySelector(".story-frame").innerHTML = `<div class="empty down">${esc(e.message)}</div>`; }
+    busy = false;
+  };
+  el.querySelector("[data-share]").addEventListener("click", async () => {
+    if (!blob) return;
+    const r = await shareBlob(blob, `ibifit-${cands[i].place.id}.png`);
+    if (r === "download") toast("Image enregistrée");
+  });
+  draw();
 }
 
 function viewHome() {
@@ -161,7 +253,7 @@ function viewHome() {
   wireForm("add", draft);
   document.getElementById("addSave").addEventListener("click", () => {
     const w = draftToWorkout(draft);
-    if (!(w.durationSec > 0) || !(w.watchKm > 0 || w.realKm > 0)) { toast("Durée et distance obligatoires"); return; }
+    if (!(w.durationSec > 0) || !(w.watchKm > 0 || w.realKm > 0 || w.segments)) { toast("Durée et distance obligatoires"); return; }
     try { upsertWorkout(w); } catch (e) { toast(e.message); return; }
     draft = emptyDraft(); addOpen = false;
     toast(`Séance enregistrée ✓ ${km(corrected(w, settings).km)}`);
@@ -185,6 +277,11 @@ function viewHome() {
     } catch (er) { st.innerHTML = `<span class="down">Erreur : ${esc(er.message)}</span>`; }
   });
   // Cartes : déplier pour modifier / supprimer
+  $app.querySelectorAll("[data-story]").forEach((b) => b.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const w = loadWorkouts().find((x) => x.id === b.dataset.story);
+    if (w) openWorkoutStory(w);
+  }));
   $app.querySelectorAll("[data-open]").forEach((el) => el.addEventListener("click", (ev) => {
     if (ev.target.closest("[data-stop]")) return;
     const id = el.dataset.open;
@@ -192,7 +289,7 @@ function viewHome() {
       const w = loadWorkouts().find((x) => x.id === id);
       openId = id;
       editDraft = { id: w.id, type: w.type, date: localInput(w.date), min: String(Math.floor(w.durationSec / 60)), sec: String(Math.round(w.durationSec % 60)),
-        watchKm: w.watchKm ?? "", realKm: w.realKm ?? "", kcalActive: w.kcalActive ?? "", kcalTotal: w.kcalTotal ?? "", hrAvg: w.hrAvg ?? "", note: w.note || "" };
+        watchKm: w.watchKm ?? "", realKm: w.realKm ?? "", segText: segmentsText(w.segments), placeId: w.placeId, kcalActive: w.kcalActive ?? "", kcalTotal: w.kcalTotal ?? "", hrAvg: w.hrAvg ?? "", note: w.note || "" };
     }
     viewHome();
   }));
@@ -206,7 +303,7 @@ function viewHome() {
       deleteWorkout(editDraft.id); openId = null; editDraft = null; toast("Séance supprimée"); viewHome();
     });
     $app.querySelector("[data-learn]")?.addEventListener("click", () => {
-      const f = numIn(editDraft.realKm) / numIn(editDraft.watchKm);
+      const f = corrected(draftToWorkout(editDraft), settings).km / numIn(editDraft.watchKm);
       settings.factors = { ...settings.factors, [editDraft.type]: Math.round(f * 1000) / 1000 };
       saveSettings(settings);
       toast(`Correction ${ACTIVITIES[editDraft.type].label.toLowerCase()} : ×${f.toFixed(2).replace(".", ",")}`);
@@ -244,7 +341,23 @@ function viewStats() {
     return d > 0 ? s / d : null;
   });
 
+  const allKm = all.reduce((t, w) => t + corrected(w, settings).km, 0);
+  const ch = nextChallenge(allKm);
+  const chRt = ratioText(ch.ratio, ch.place);
+  const done = PLACES.filter((p) => p.km <= allKm);
   $app.innerHTML = `
+    ${all.length ? `<div class="challenge">
+      <div class="ch-img">${placeSVG(ch.place, ch.ratio, { id: "ch" })}<span class="ch-where">📍 ${esc(ch.place.where)} ${ch.place.flag}</span></div>
+      <div class="ch-body">
+        <div class="small" style="opacity:.7">Défi en cours · depuis le début</div>
+        <div class="ch-big">${esc(chRt.big)}</div>
+        <div class="ch-line">${esc(chRt.line)}</div>
+        <div class="ch-bar"><i style="width:${Math.max(2, Math.min(100, ch.ratio * 100)).toFixed(1)}%"></i></div>
+        <div class="row between small" style="opacity:.75;margin-top:6px"><span>${km(allKm, 1)}</span><span>${ch.place.km.toLocaleString("fr-FR")} km</span></div>
+        ${done.length ? `<div class="small" style="opacity:.75;margin-top:10px">🏁 ${done.length} lieu${done.length > 1 ? "x" : ""} déjà bouclé${done.length > 1 ? "s" : ""}, dont ${done.slice(-2).reverse().map((p) => `${p.flag} ${esc(p.short)}`).join(" et ")}</div>` : ""}
+        <button class="btn primary block" id="chStory" style="margin-top:14px">${IG} Partager en story</button>
+      </div>
+    </div>` : ""}
     <div class="tabs">${[["4", "4 semaines"], ["12", "12 semaines"], ["all", "Tout"]].map(([k, l]) => `<button data-range="${k}" class="${statsRange === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <div class="kpis" style="margin-top:6px">
       <div class="kpi"><b class="num">${km(tot.km, 1)}</b><span>distance corrigée</span></div>
@@ -263,6 +376,16 @@ function viewStats() {
       ${paceChart(keys, paceRows)}
       <div class="small muted">Plus la courbe descend, plus tu vas vite. Calculée avec la distance corrigée.</div>
     </div>`;
+  document.getElementById("chStory")?.addEventListener("click", () => {
+    const cands = [ch, ...PLACES.filter((p) => p.id !== ch.place.id).map((p) => ({ place: p, ratio: allKm / p.km })).sort((a, b) => Math.abs(Math.log(a.ratio)) - Math.abs(Math.log(b.ratio)))];
+    const allSec = all.reduce((t, w) => t + (w.durationSec || 0), 0);
+    openStory(cands, (cand) => ({
+      place: cand.place, ratio: cand.ratio, date: dateStory(Date.now()),
+      kicker: "Depuis le début, j'ai parcouru l'équivalent de",
+      subtitle: `${km(allKm, 1)} en ${all.length} séance${all.length > 1 ? "s" : ""}`,
+      stats: [[km(allKm, 1).replace(" km", ""), "km"], [`${Math.round(allSec / 3600)} h`, "en tout"], [String(all.length), "séances"], [int(all.reduce((t, w) => t + (w.kcalActive || 0), 0)), "kcal"]],
+    }));
+  });
   $app.querySelectorAll("[data-range]").forEach((b) => b.addEventListener("click", () => { statsRange = b.dataset.range; viewStats(); }));
   $app.querySelectorAll("[data-metric]").forEach((b) => b.addEventListener("click", () => { statsMetric = b.dataset.metric; viewStats(); }));
 }

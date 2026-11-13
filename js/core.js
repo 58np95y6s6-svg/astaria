@@ -23,17 +23,34 @@ export function factorFor(type, settings = {}) {
  */
 export function corrected(w, settings = {}) {
   const watchKm = Number(w.watchKm) || 0;
-  const factor = w.realKm > 0 && watchKm > 0 ? w.realKm / watchKm : factorFor(w.type, settings);
-  const km = w.realKm > 0 ? Number(w.realKm) : watchKm * factor;
-  const sec = Number(w.durationSec) || 0;
+  const segKm = segmentsKm(w.segments);
+  const real = w.realKm > 0 ? Number(w.realKm) : segKm > 0 ? segKm : 0;
+  const factor = real > 0 && watchKm > 0 ? real / watchKm : real > 0 ? 1 : factorFor(w.type, settings);
+  const km = real > 0 ? real : watchKm * factor;
+  const sec = Number(w.durationSec) || segmentsMin(w.segments) * 60 || 0;
   return {
     km: round(km, 2),
     factor: round(factor, 3),
     paceSec: km > 0 && sec > 0 ? sec / km : null, // secondes par km
     speed: km > 0 && sec > 0 ? round(km / (sec / 3600), 1) : null, // km/h
-    source: w.realKm > 0 ? "réel" : factor !== 1 ? "corrigé" : "montre",
+    source: w.realKm > 0 ? "réel" : segKm > 0 ? "paliers" : factor !== 1 ? "corrigé" : "montre",
   };
 }
+
+// Paliers de vitesse du tapis : « 5 min à 3,5 puis 40 min à 6 » → [{min:5, speed:3.5}, {min:40, speed:6}].
+export function parseSegments(text) {
+  const t = norm(text || "").replace(/km\s*\/?\s*h/g, " ");
+  const re = /(?:(\d+)\s*h\s*)?(\d+(?:[.,]\d+)?)\s*(?:minutes?|min|mn|')?\s*(?:a|@|x|en|:)\s*(\d+(?:[.,]\d+)?)/g;
+  const out = [];
+  for (const m of t.matchAll(re)) {
+    const min = (+m[1] || 0) * 60 + num(m[2]), speed = num(m[3]);
+    if (min > 0 && min <= 600 && speed > 0 && speed <= 30) out.push({ min, speed });
+  }
+  return out;
+}
+export const segmentsKm = (segs) => (Array.isArray(segs) ? segs.reduce((t, s) => t + (s.min / 60) * s.speed, 0) : 0);
+export const segmentsMin = (segs) => (Array.isArray(segs) ? segs.reduce((t, s) => t + s.min, 0) : 0);
+export const segmentsText = (segs) => (segs || []).map((s) => `${String(s.min).replace(".", ",")} min à ${String(s.speed).replace(".", ",")}`).join(" puis ");
 
 // « 25:12 », « 0:25:12 », « 1h05 », « 25 min 12 s », « 25' 12" » → secondes.
 export function parseDuration(s) {

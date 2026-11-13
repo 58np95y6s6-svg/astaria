@@ -101,3 +101,47 @@ label { font-size: 12.5px; color: var(--muted); display: block; margin-bottom: 4
 .install img { width: 36px; height: 36px; border-radius: 10px; flex: none; }
 .install button { border: 0; background: transparent; font-size: 18px; color: var(--muted); cursor: pointer; }
 input[type=range] { touch-action: none; }
+
+/* Comparaison à un lieu connu (carte séance) */
+.cmp { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 8px; border-radius: 16px;
+  background: linear-gradient(120deg, #1e2342, #2f2a5c 70%, #4a2a55); color: #fff; }
+.cmp-img { width: 58px; height: 58px; border-radius: 13px; overflow: hidden; flex: none; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+.cmp-img svg, .ch-img svg { width: 100%; height: 100%; display: block; }
+.cmp .small.muted { color: var(--navy-muted); font-size: 11.5px; }
+.cmp-big { font-size: 20px; letter-spacing: -.02em; }
+.cmp-line { font-size: 13px; font-weight: 600; opacity: .9; }
+.story-btn { flex: none; width: 44px; height: 44px; border-radius: 14px; border: 0; color: #fff; cursor: pointer; display: grid; place-items: center;
+  background: linear-gradient(45deg, #f9a43a, #f4555a 45%, #c13ad1); box-shadow: 0 6px 16px rgba(244,85,90,.4); }
+
+/* Paliers de vitesse */
+.seg-prev { margin: 4px 0 8px; }
+.seg-chart { width: 100%; height: 64px; display: block; margin-bottom: 4px; }
+.seg-chart text { font-size: 11px; font-weight: 800; fill: #fff; }
+
+/* Défi cumulé (Stats) */
+.challenge { border-radius: 26px; overflow: hidden; color: #fff; margin-bottom: 14px; box-shadow: 0 14px 30px rgba(30,35,66,.35);
+  background: linear-gradient(160deg, #151a36, #262150 60%, #3a1f45); }
+.ch-img { position: relative; aspect-ratio: 16 / 10; overflow: hidden; }
+.ch-img::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 55%, #1d1c44); }
+.ch-where { position: absolute; left: 12px; top: 12px; z-index: 1; font-size: 12.5px; font-weight: 700; background: rgba(15,18,42,.6); padding: 6px 11px; border-radius: 999px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.ch-body { padding: 4px 18px 18px; }
+.ch-big { font-size: 44px; font-weight: 900; letter-spacing: -.03em; line-height: 1.05; margin-top: 4px; }
+.ch-line { font-weight: 700; font-size: 16px; }
+.ch-bar { height: 10px; border-radius: 999px; background: rgba(255,255,255,.14); margin-top: 14px; overflow: hidden; }
+.ch-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ff9a7a, #f4555a); }
+
+/* Fenêtre story */
+.modal { position: fixed; inset: 0; z-index: 40; background: rgba(12,14,32,.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: flex-end; justify-content: center; }
+.modal-sheet { width: 100%; max-width: 520px; max-height: 94%; overflow-y: auto; overscroll-behavior: contain; background: var(--sheet); border-radius: 28px 28px 0 0;
+  padding: 16px 16px max(18px, env(safe-area-inset-bottom)); animation: up .25s ease-out; }
+@keyframes up { from { transform: translateY(40px); opacity: 0; } }
+.icon-close { border: 0; width: 34px; height: 34px; border-radius: 12px; background: var(--soft); color: var(--muted); font-size: 15px; cursor: pointer; }
+.story-frame { margin: 12px auto; width: min(100%, calc((94vh - 260px) * 9 / 16)); aspect-ratio: 9 / 16; border-radius: 22px; overflow: hidden; background: #1e2342; box-shadow: var(--shadow); display: grid; place-items: center; }
+.story-frame img { width: 100%; height: 100%; display: block; }
+.story-frame .loader { color: var(--navy-muted); }
+.place-chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: none; }
+.place-chips::-webkit-scrollbar { display: none; }
+.pchip { flex: none; border: 0; background: var(--card); box-shadow: var(--shadow); border-radius: 999px; padding: 8px 12px; font-weight: 700; font-size: 13px; cursor: pointer; color: var(--text); }
+.pchip.on { background: var(--navy); color: #fff; }
+.btn[disabled] { opacity: .5; }

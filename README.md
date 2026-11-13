@@ -24,3 +24,9 @@ npm test
 ```
 
 L'ancienne app NBA (iBiBet) est conservée sur la branche `nba-archive`.
+
+## Comparaisons, paliers et stories
+
+- **Paliers de vitesse** : « 5 min à 3,5 puis 40 min à 6 » → distance réelle calculée (prime sur le facteur, pas sur une distance réelle saisie).
+- **Lieux célèbres** : chaque séance est comparée au lieu le plus parlant (Champs-Élysées, Golden Gate, Central Park… jusqu'à la Muraille de Chine et le tour de la Terre), avec une vue aérienne stylisée et le trajet dessiné. L'onglet Stats affiche le défi cumulé.
+- **Story Instagram** : image 1080×1920 générée sur le téléphone, partagée via la feuille de partage iOS (Instagram → Story).

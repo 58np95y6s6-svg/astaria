@@ -185,3 +185,4 @@ details.mini { background: var(--soft); border-radius: 14px; padding: 10px 12px;
 details.mini summary { cursor: pointer; font-size: 14px; }
 details.mini .steps { margin-top: 8px; }
 code { background: #fff; border-radius: 6px; padding: 1px 5px; font-size: 12.5px; }
+.sync-btn { margin-top: 12px; background: var(--card); box-shadow: var(--shadow); color: var(--accent); }

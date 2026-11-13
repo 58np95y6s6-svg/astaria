@@ -34,24 +34,7 @@ let settings = loadSettings();
 const routes = [
   [/^#?\/?$/, viewHome],
   [/^#\/import\?(.*)$/, (q) => { draft = { ...emptyDraft(), ...fromParsed(parseImportParams(q)) }; draft.end = endOf(draft.date, (numIn(draft.min) || 0) * 60 + (numIn(draft.sec) || 0)); addOpen = true; history.replaceState(null, "", "#/"); viewHome(); toast("Séance reçue : vérifie puis enregistre"); }],
-  [/^#\/sync\?(.*)$/, (q) => {
-    history.replaceState(null, "", "#/");
-    try {
-      const qs = new URLSearchParams(q);
-      let items, info = "";
-      if (qs.get("ds") != null) { qs.set("d", zipLists(qs.get("ds"), qs.get("de"), qs.get("dv"))); qs.set("e", zipLists(qs.get("es"), qs.get("ee"), qs.get("ev"))); }
-      if (qs.get("d") != null) {
-        const dist = parseSamples(qs.get("d")), en = parseSamples(qs.get("e"));
-        items = sessionsFromSamples(dist, en);
-        info = `${dist.length} mesures de distance, ${en.length} d'énergie`;
-        settings.lastSyncInfo = info;
-      } else items = parseSyncParam(qs.get("w"));
-      const r = mergeHealth(items);
-      settings.lastSync = new Date().toISOString(); saveSettings(settings);
-      viewHome();
-      toast(r.added ? `${r.added} nouvelle${r.added > 1 ? "s" : ""} séance${r.added > 1 ? "s" : ""} synchronisée${r.added > 1 ? "s" : ""} ❤️` : items.length ? "Synchro faite : tout est à jour ✓" : info ? `Aucune séance trouvée (${info})` : "Synchro : aucune séance reçue");
-    } catch (e) { viewHome(); toast(e.message); }
-  }],
+  [/^#\/sync\?(.*)$/, (q) => { history.replaceState(null, "", "#/"); runSync(q); }],
   [/^#\/stats$/, viewStats],
   [/^#\/resume$/, viewRecap],
   [/^#\/reglages$/, viewSettings],
@@ -67,6 +50,34 @@ function router() {
   location.hash = "#/";
 }
 window.addEventListener("hashchange", router);
+
+// ---------- Synchro Santé (lien du Raccourci ou presse-papiers) ----------
+function runSync(q) {
+  try {
+    const qs = new URLSearchParams(q);
+    let items, info = "";
+    if (qs.get("ds") != null) { qs.set("d", zipLists(qs.get("ds"), qs.get("de"), qs.get("dv"))); qs.set("e", zipLists(qs.get("es"), qs.get("ee"), qs.get("ev"))); }
+    if (qs.get("d") != null) {
+      const dist = parseSamples(qs.get("d")), en = parseSamples(qs.get("e"));
+      items = sessionsFromSamples(dist, en);
+      info = `${dist.length} mesures de distance, ${en.length} d'énergie`;
+      if (!dist.length && qs.get("ds")) info += ` · reçu : « ${String(qs.get("ds")).slice(0, 40)}… »`;
+      settings.lastSyncInfo = info;
+    } else items = parseSyncParam(qs.get("w"));
+    const r = mergeHealth(items);
+    settings.lastSync = new Date().toISOString(); saveSettings(settings);
+    viewHome();
+    toast(r.added ? `${r.added} nouvelle${r.added > 1 ? "s" : ""} séance${r.added > 1 ? "s" : ""} synchronisée${r.added > 1 ? "s" : ""} ❤️` : items.length ? "Synchro faite : tout est à jour ✓" : info ? `Aucune séance trouvée (${info})` : `Synchro : rien reçu (${[...qs.keys()].join(", ") || "lien vide"})`);
+  } catch (e) { viewHome(); toast(e.message); }
+}
+async function pasteSync() {
+  let t = "";
+  try { t = await navigator.clipboard.readText(); } catch { toast("Accès au presse-papiers refusé"); return; }
+  const i = t.indexOf("sync?");
+  const q = i >= 0 ? t.slice(i + 5) : /(^|&)(ds|d|w)=/.test(t) ? t : null;
+  if (!q) { toast("Presse-papiers vide : lance d'abord le raccourci iBiFit Sync"); return; }
+  runSync(q.trim());
+}
 
 // ---------- formulaire de séance (ajout / modification) ----------
 const emptyDraft = () => ({ type: "walk_treadmill", date: localInput(Date.now()), min: "", sec: "", watchKm: "", realKm: "", segText: "", kcalActive: "", kcalTotal: "", hrAvg: "", note: "" });
@@ -290,6 +301,7 @@ function viewHome() {
       <div class="kpi"><b class="num">${int(sum(thisWeek, (w) => w.kcalActive))}</b><span>kcal actives</span></div>
       <div class="kpi"><b class="num">${thisWeek.length}</b><span>séance${thisWeek.length > 1 ? "s" : ""}</span></div>
     </div>
+    <button class="btn block sync-btn" id="pasteSync">🔄 Récupérer la synchro Santé</button>
     <details class="acc" id="addAcc"${addOpen || !list.length ? " open" : ""}>
       <summary><span class="acc-ico">+</span><div class="grow"><b>Ajouter une séance</b><div class="small muted">capture Forme / Santé, lien Raccourci ou saisie</div></div><span class="chev" aria-hidden="true"></span></summary>
       <div class="acc-body">
@@ -304,6 +316,7 @@ function viewHome() {
     ${list.length ? [...byDay.entries()].map(([, ws]) => `<div class="day">${dayLabel(ws[0].date)}</div>${ws.map(workoutCard).join("")}`).join("")
       : `<div class="card empty">Aucune séance pour l'instant.<br><span class="small">Ajoute ta première séance ci-dessus.</span></div>`}`;
 
+  document.getElementById("pasteSync").addEventListener("click", pasteSync);
   const acc = document.getElementById("addAcc");
   acc.addEventListener("toggle", () => { addOpen = acc.open; });
   wireForm("add", draft);

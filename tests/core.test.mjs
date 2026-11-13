@@ -138,3 +138,12 @@ test("périodes, totaux, séries, motivation", () => {
   assert.match(motivation({ kind: "week", cur: s, prev: { km: 6, n: 1 }, goalKm: 12, isCurrent: true }), /Objectif atteint/);
   assert.match(motivation({ kind: "week", cur: s, prev: { km: 6, n: 1 }, goalKm: 30, isCurrent: true }), /\+100 %/);
 });
+
+import { SAT } from "../js/sat.js";
+test("vues satellite : tracés réels pour les lieux", () => {
+  assert.ok(Object.keys(SAT).length >= 45);
+  for (const [k, v] of Object.entries(SAT)) {
+    assert.ok(PLACES.find((p) => p.id === k), `lieu inconnu : ${k}`);
+    assert.ok(v.path.length >= 2 && v.path.every(([a, b]) => Math.abs(a) <= 85 && Math.abs(b) <= 180), k);
+  }
+});

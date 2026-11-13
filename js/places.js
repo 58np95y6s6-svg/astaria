@@ -53,12 +53,12 @@ export const PLACES = [
   { id: "karting", laps: "de piste de karting", short: "Piste de karting", where: "Karting du coin", flag: "🏎️", km: 1.0, scene: "circuit", alt: 5, quip: "Sans se faire doubler par un enfant de 10 ans." },
 
   // --- Tours de terrain / aller-retours ---
-  { id: "foottour", laps: "de terrain de foot", short: "Tours de terrain de foot", where: "105 × 68 m", flag: "⚽", km: 0.346, scene: "field", field: "foot", quip: "Échauffement validé, coach." },
-  { id: "rugbytour", laps: "de terrain de rugby", short: "Tours de terrain de rugby", where: "en-buts compris", flag: "🏉", km: 0.428, scene: "field", field: "rugby", quip: "Sans plaquage." },
-  { id: "baskettour", laps: "de terrain de basket", short: "Tours de terrain de basket", where: "28 × 15 m", flag: "🏀", km: 0.086, scene: "field", field: "basket", quip: "Le banc de touche te regarde." },
-  { id: "tennistour", laps: "de court de tennis", short: "Tours de court de tennis", where: "23,77 × 10,97 m", flag: "🎾", km: 0.0695, scene: "field", field: "tennis", quip: "Ramasseur de balles de compétition." },
-  { id: "hockeytour", laps: "de patinoire", short: "Tours de patinoire", where: "60 × 30 m", flag: "🏒", km: 0.17, scene: "field", field: "ice", quip: "Sans glisser une seule fois." },
-  { id: "velodrome", laps: "de vélodrome", short: "Tours de vélodrome", where: "Piste de 250 m", flag: "🚴", km: 0.25, scene: "stadium", velodrome: true, quip: "Sans vélo, c'est plus dur." },
+  { id: "foottour", laps: "de terrain de foot", short: "Tours de terrain de foot", where: "Parc des Princes", flag: "⚽", km: 0.35, scene: "field", field: "foot", quip: "Échauffement validé, coach." },
+  { id: "rugbytour", laps: "de terrain de rugby", short: "Tours de terrain de rugby", where: "Stade de France", flag: "🏉", km: 0.4, scene: "field", field: "rugby", quip: "Sans plaquage." },
+  { id: "baskettour", laps: "de terrain de basket", short: "Tours de terrain de basket", where: "Rucker Park, New York", flag: "🏀", km: 0.09, scene: "field", field: "basket", quip: "Le banc de touche te regarde." },
+  { id: "tennistour", laps: "de court de tennis", short: "Tours de court de tennis", where: "Roland-Garros", flag: "🎾", km: 0.08, scene: "field", field: "tennis", quip: "Ramasseur de balles de compétition." },
+  { id: "hockeytour", laps: "de patinoire", short: "Tours de patinoire", where: "Rockefeller Center, New York", flag: "🏒", km: 0.11, scene: "field", field: "ice", quip: "Sans glisser une seule fois." },
+  { id: "velodrome", laps: "de vélodrome", short: "Tours de vélodrome", where: "Vélodrome de Roubaix", flag: "🚴", km: 0.5, scene: "stadium", velodrome: true, quip: "Sans vélo, c'est plus dur." },
 
   // --- Objets mis bout à bout (le chiffre est le nombre d'objets) ---
   { id: "spaghetti", count: true, plural: "spaghettis mis bout à bout", short: "Spaghettis", flag: "🍝", km: 0.00025, glyph: "spaghetti", bg: "#b8432e", quip: "Al dente, évidemment." },

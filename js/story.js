@@ -51,7 +51,18 @@ export async function renderStory(o) {
   ctx.fillStyle = "#fff"; ctx.fillText("iBi", 70, 190);
   const wb = ctx.measureText("iBi").width;
   ctx.fillStyle = "#f4555a"; ctx.fillText("Fit", 70 + wb, 190);
-  ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.textAlign = "right"; fit(ctx, o.date || "", 720, 34, 600);
+  let left = 70 + wb + ctx.measureText("Fit").width + 24;
+  // Pastille de l'activité (« 🚶 Marche sur tapis »)
+  if (o.activity) {
+    const txt = `${o.activity.icon}  ${o.activity.label}`;
+    ctx.font = `700 34px ${FONT}`;
+    const pw = ctx.measureText(txt).width + 44;
+    ctx.fillStyle = "rgba(244,85,90,.22)"; rr(ctx, left, 140, pw, 66, 33); ctx.fill();
+    ctx.strokeStyle = "rgba(244,85,90,.55)"; ctx.lineWidth = 2; rr(ctx, left, 140, pw, 66, 33); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.fillText(txt, left + 22, 185);
+    left += pw + 20;
+  }
+  ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.textAlign = "right"; fit(ctx, o.date || "", Math.max(200, W - 70 - left), 32, 600);
   ctx.fillText(o.date || "", W - 70, 188); ctx.textAlign = "left";
 
   // Illustration (paysage, rognée au centre)

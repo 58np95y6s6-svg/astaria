@@ -250,9 +250,10 @@ function openWorkoutStory(w) {
   const first = compareFor(w, c);
   const cands = [first, ...placesFor(c.km).filter((x) => x.place.id !== first.place.id)];
   openStory(cands, (cand) => ({
-    place: cand.place, ratio: cand.ratio, date: `${dateStory(w.date)} · ${spanLabel(w.date, w.durationSec).replace(" → ", "–")}`,
+    place: cand.place, ratio: cand.ratio, date: `${new Date(w.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} · ${spanLabel(w.date, w.durationSec).replace(" → ", "–")}`,
     kicker: "Aujourd'hui j'ai parcouru l'équivalent de",
-    subtitle: `${km(c.km)} · ${a.label.toLowerCase()}`,
+    subtitle: `${km(c.km)} en ${fmtDuration(w.durationSec)}`,
+    activity: { icon: a.icon, label: a.label },
     food: foodLine(w.kcalActive, cand.place.id + w.id),
     stats: [[km(c.km, c.km >= 10 ? 1 : 2).replace(" km", ""), "km"], [fmtDuration(w.durationSec), "durée"], [fmtPace(c.paceSec).replace(" /km", ""), "allure /km"], [int(w.kcalActive), "kcal"]],
   }), (cand) => { upsertWorkout({ ...w, placeId: cand.place.id }); if ((location.hash || "#/") === "#/") viewHome(); });

@@ -258,7 +258,7 @@ function looseDate(s) {
   if (m) return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)).toISOString();
   // « 13 nov. 2026 à 06:42:30 » / « 13 novembre 2026 06:42 »
   const MO = ["jan", "fev", "mar", "avr", "mai", "juin", "juil", "aou", "sep", "oct", "nov", "dec"];
-  m = /^(\d{1,2})\s+([a-zéû]+)\.?\s+(\d{4})[\s,à]*(\d{1,2})[:h](\d{2})(?::(\d{2}))?/i.exec(norm(s));
+  m = /^(\d{1,2})\s+([a-zéû]+)\.?\s+(\d{4})(?:\s|,|\ba\b)*(\d{1,2})[:h](\d{2})(?::(\d{2}))?/i.exec(norm(s));
   if (m) {
     const k = m[2].replace(/[^a-z]/g, "");
     const mi = MO.findIndex((x) => k.startsWith(x) || (x === "juin" && k === "jun") || (x === "juil" && k.startsWith("jul")));

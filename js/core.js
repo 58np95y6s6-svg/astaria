@@ -81,10 +81,13 @@ export function parseWorkoutText(text) {
   const out = { type: null, durationSec: null, watchKm: null, kcalActive: null, kcalTotal: null, hrAvg: null, found: [] };
 
   // Type d'activité
-  if (/marche (en )?interieur|indoor walk|tapis/.test(t)) out.type = "walk_treadmill";
-  else if (/course (en )?interieur|indoor run/.test(t)) out.type = "run_treadmill";
-  else if (/marche|walk/.test(t)) out.type = "walk_out";
-  else if (/course|run/.test(t)) out.type = "run_out";
+  // « Marche » seul (carte Résumé de Santé) = marche sur tapis ; l'extérieur est toujours précisé.
+  const t1 = t.replace(/distance \(marche et course\)|walking \+ running distance/g, "");
+  if (/marche (en )?exterieur|outdoor walk/.test(t1)) out.type = "walk_out";
+  else if (/course (en )?exterieur|outdoor run/.test(t1)) out.type = "run_out";
+  else if (/course (en )?interieur|indoor run/.test(t1)) out.type = "run_treadmill";
+  else if (/marche|walk|tapis/.test(t1)) out.type = "walk_treadmill";
+  else if (/course|run/.test(t1)) out.type = "run_out";
   else if (/velo|cycl/.test(t)) out.type = "bike";
 
   // Valeur sur la même ligne que le libellé, ou sur la ligne suivante (grille de l'app Forme).
@@ -113,22 +116,32 @@ export function parseWorkoutText(text) {
     return null;
   };
 
+  // Carte « Exercices » de l'app Santé (Résumé) : « 48 min | 255 kcal | 2,9 km » sur une ligne.
+  const KCAL = "k[ce][ae]l";
+  const card = new RegExp(`(?:(\\d{1,2})\\s*h\\s*)?(\\d{1,3})\\s*min\\b.*?(\\d{1,4})\\s*${KCAL}.*?(\\d+(?:[.,]\\d+)?)\\s*km\\b`).exec(t);
+  if (card) {
+    out.durationSec = (+card[1] || 0) * 3600 + +card[2] * 60;
+    out.kcalActive = +card[3];
+    out.watchKm = num(card[4]);
+  }
+
   // Durée : libellé « temps d'entraînement / durée », sinon un H:MM:SS (l'heure de la barre d'état est en H:MM).
-  let m = near(/temps d.?entrainement|duree|workout time|total time|temps total/, /(\d{1,2}:\d{2}:\d{2}|\d{1,3}:\d{2})(?!\s*(?:am|pm))/);
-  if (!m) m = /(?:^|\s)(\d{1,2}:\d{2}:\d{2})(?:\s|$)/m.exec(t);
+  let m = out.durationSec != null ? null : near(/temps d.?entrainement|duree|workout time|total time|temps total/, /(\d{1,2}:\d{2}:\d{2}|\d{1,3}:\d{2})(?!\s*(?:am|pm))/);
+  if (!m && out.durationSec == null) m = /(?:^|\s)(\d{1,2}:\d{2}:\d{2})(?:\s|$)/m.exec(t);
   if (m) out.durationSec = parseDuration(m[1]);
 
   // Distance
-  m = near(/distance/, /(\d+(?:[.,]\d+)?)\s*(km|m)\b/) || /(\d+[.,]\d+)\s*km\b/.exec(t);
+  m = out.watchKm != null ? null : near(/distance/, /(\d+(?:[.,]\d+)?)\s*(km|m)\b/) || /(\d+[.,]\d+)\s*km\b/.exec(t);
   if (m) out.watchKm = m[2] === "m" ? num(m[1]) / 1000 : num(m[1]);
 
   // Calories actives / totales
-  m = near(/calories actives|active cal|energie active|active energy/, /(\d{1,4}(?:[.,]\d)?)\s*(?:kcal|cal)/);
+  const kcalRe = new RegExp(`(\\d{1,4}(?:[.,]\\d)?)\\s*(?:${KCAL}|cal)`);
+  m = out.kcalActive != null ? null : near(/calories actives|active cal|energie active|active energy/, kcalRe);
   if (m) out.kcalActive = num(m[1]);
-  m = near(/calories totales|total cal|energie totale/, /(\d{1,4}(?:[.,]\d)?)\s*(?:kcal|cal)/);
+  m = near(/calories totales|total cal|energie totale/, kcalRe);
   if (m) out.kcalTotal = num(m[1]);
   if (out.kcalActive == null) {
-    const all = [...t.matchAll(/(\d{1,4})\s*kcal/g)].map((x) => +x[1]);
+    const all = [...t.matchAll(new RegExp(`(\\d{1,4})\\s*${KCAL}`, "g"))].map((x) => +x[1]);
     if (all.length) out.kcalActive = all[0];
   }
 

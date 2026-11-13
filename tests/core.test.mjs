@@ -52,3 +52,15 @@ test("capture lue en deux colonnes par l'OCR (« Calories actives Calories total
   const r = parseWorkoutText(txt);
   assert.deepEqual([r.type, r.durationSec, r.watchKm, r.kcalActive, r.kcalTotal, r.hrAvg], ["walk_treadmill", 1512, 0.8, 96, 131, 104]);
 });
+
+test("carte « Exercices » du Résumé Santé (vraie capture, OCR brut)", () => {
+  const txt = `07:26 ::7-@\nRésumé s 27\nPoints clés\nD Exercices\nVous avez parcouru 2,9 kilomètres lors de\nvotre dernier exercice.\n. Marche\nAT  48min 255keal 2,9 km\nO Nombre de pas\nJusqu'ici, vous avez fait plus de pas que\nd'habitude.\n@ Aujourd'hui @ Moyenne\n4 547 pas 1 7 pas\n|\n00:00 07:00 00:00\nD Distance (marche et course)\nVous = eo ss etre\nenn aa @e8\nderni Résumé Partage Parcourir`;
+  const r = parseWorkoutText(txt);
+  assert.deepEqual([r.type, r.durationSec, r.watchKm, r.kcalActive], ["walk_treadmill", 48 * 60, 2.9, 255]);
+  const c = corrected({ type: r.type, watchKm: r.watchKm, durationSec: r.durationSec });
+  assert.equal(c.km, 4.35);
+});
+
+test("marche extérieure reste extérieure", () => {
+  assert.equal(parseWorkoutText("Marche en extérieur\n1:02:00\n5,1 km").type, "walk_out");
+});

@@ -175,3 +175,19 @@ test("synchro Raccourci : plusieurs séances dans un lien", () => {
   assert.equal(r[0].id, "h" + new Date("2026-11-13T05:42:00Z").getTime().toString(36));
   assert.deepEqual([r[1].type, r[1].watchKm, r[1].durationSec], ["run_out", 4.99, 1800]);
 });
+
+import { parseSamples, sessionsFromSamples } from "../js/core.js";
+test("synchro par échantillons : retrouve la séance de tapis", () => {
+  const t0 = new Date("2026-11-13T06:42:00+01:00").getTime();
+  const iso = (ms) => new Date(ms).toISOString();
+  const rows = [], en = [];
+  // séance : 48 min, un échantillon de distance toutes les 30 s (2,9 km au total)
+  for (let i = 0; i < 96; i++) rows.push(`${iso(t0 + i * 30e3)}~${iso(t0 + (i + 1) * 30e3)}~${(2.9 / 96).toFixed(4).replace(".", ",")}~Apple Watch de Moi`);
+  for (let i = 0; i < 48; i++) en.push(`${iso(t0 + i * 60e3)}~${iso(t0 + (i + 1) * 60e3)}~5,3~Apple Watch de Moi`);
+  // même distance comptée par l'iPhone (doit être ignorée) + petits déplacements dans la journée (pas des séances)
+  rows.push(`${iso(t0)}~${iso(t0 + 2880e3)}~2,5~iPhone de Moi`);
+  rows.push(`${iso(t0 + 4 * 3600e3)}~${iso(t0 + 4 * 3600e3 + 120e3)}~0,15~Apple Watch de Moi`);
+  const s = sessionsFromSamples(parseSamples(rows.join(";")), parseSamples(en.join(";")));
+  assert.equal(s.length, 1);
+  assert.deepEqual([s[0].type, s[0].durationSec, s[0].watchKm, s[0].kcalActive, s[0].date], ["walk_treadmill", 2880, 2.9, 254, iso(t0)]);
+});

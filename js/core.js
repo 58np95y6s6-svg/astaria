@@ -283,3 +283,49 @@ export function parseSyncParam(w) {
     };
   }).filter((x) => x && x.durationSec > 0);
 }
+
+// ---------- Synchro par échantillons bruts (Distance de marche et de course + Énergie active) ----------
+// Une ligne par échantillon : début~fin~valeur~source, séparées par « ; ».
+export function parseSamples(s) {
+  return String(s || "").split(/[;\n]+/).map((row) => {
+    const [a, b, v, src = ""] = row.split("~");
+    const start = looseDate(a), end = looseDate(b) || start, value = frNum(v);
+    if (!start || value == null) return null;
+    return { s: new Date(start).getTime(), e: new Date(end).getTime(), v: value, src: src.trim(), unit: norm(v) };
+  }).filter(Boolean);
+}
+const watchOnly = (list) => { const w = list.filter((x) => /watch/i.test(x.src)); return w.length ? w : list; };
+
+/**
+ * Retrouve les séances : distance enregistrée en continu (trous ≤ 3 min) pendant ≥ 8 min, ≥ 0,3 km, entre 2 et 25 km/h.
+ * Les kcal = énergie active de la montre sur la même période.
+ */
+export function sessionsFromSamples(dist, energy = [], { gapSec = 180, minSec = 480, minKm = 0.3 } = {}) {
+  const toKmV = (x) => (/\bmi\b|mile/.test(x.unit) ? x.v * 1.609344 : /\bm\b/.test(x.unit) && !/km/.test(x.unit) ? x.v / 1000 : x.v);
+  const d = watchOnly(dist).sort((a, b) => a.s - b.s);
+  const en = watchOnly(energy);
+  const groups = [];
+  for (const x of d) {
+    const g = groups[groups.length - 1];
+    if (g && x.s - g.e <= gapSec * 1000) { g.e = Math.max(g.e, x.e); g.km += toKmV(x); }
+    else groups.push({ s: x.s, e: x.e, km: toKmV(x) });
+  }
+  return groups.filter((g) => {
+    const sec = (g.e - g.s) / 1000, v = g.km / (sec / 3600);
+    return sec >= minSec && g.km >= minKm && v >= 2 && v <= 25;
+  }).map((g) => {
+    let kcal = 0;
+    for (const x of en) {
+      const ov = Math.min(g.e, x.e) - Math.max(g.s, x.s);
+      if (ov > 0) kcal += x.e > x.s ? (x.v * ov) / (x.e - x.s) : x.v;
+      else if (x.e === x.s && x.s >= g.s && x.s <= g.e) kcal += x.v;
+    }
+    const start = new Date(g.s).toISOString(), sec = Math.round((g.e - g.s) / 1000);
+    const v = g.km / (sec / 3600);
+    return {
+      id: "h" + g.s.toString(36), source: "sante", type: v > 7.5 ? "run_treadmill" : "walk_treadmill",
+      date: start, durationSec: sec, watchKm: Math.round(g.km * 100) / 100,
+      kcalActive: en.length ? Math.round(kcal) : null, kcalTotal: null, hrAvg: null,
+    };
+  });
+}

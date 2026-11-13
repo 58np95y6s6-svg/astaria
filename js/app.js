@@ -1,4 +1,4 @@
-import { parseSyncParam, spanSec, ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
+import { parseSyncParam, parseSamples, sessionsFromSamples, spanSec, ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
 import { PLACES, placesFor, pickFor, placeSVG, ratioText, nextChallenge, challengePlaces } from "./places.js";
 import { renderStory, shareBlob } from "./story.js";
 import { SAT, satCanvas } from "./sat.js";
@@ -37,11 +37,18 @@ const routes = [
   [/^#\/sync\?(.*)$/, (q) => {
     history.replaceState(null, "", "#/");
     try {
-      const items = parseSyncParam(new URLSearchParams(q).get("w"));
+      const qs = new URLSearchParams(q);
+      let items, info = "";
+      if (qs.get("d") != null) {
+        const dist = parseSamples(qs.get("d")), en = parseSamples(qs.get("e"));
+        items = sessionsFromSamples(dist, en);
+        info = `${dist.length} mesures de distance, ${en.length} d'énergie`;
+        settings.lastSyncInfo = info;
+      } else items = parseSyncParam(qs.get("w"));
       const r = mergeHealth(items);
       settings.lastSync = new Date().toISOString(); saveSettings(settings);
       viewHome();
-      toast(r.added ? `${r.added} nouvelle${r.added > 1 ? "s" : ""} séance${r.added > 1 ? "s" : ""} synchronisée${r.added > 1 ? "s" : ""} ❤️` : items.length ? "Synchro faite : tout est à jour ✓" : "Synchro : aucune séance reçue");
+      toast(r.added ? `${r.added} nouvelle${r.added > 1 ? "s" : ""} séance${r.added > 1 ? "s" : ""} synchronisée${r.added > 1 ? "s" : ""} ❤️` : items.length ? "Synchro faite : tout est à jour ✓" : info ? `Aucune séance trouvée (${info})` : "Synchro : aucune séance reçue");
     } catch (e) { viewHome(); toast(e.message); }
   }],
   [/^#\/stats$/, viewStats],
@@ -605,15 +612,15 @@ function viewSettings() {
       <details class="mini"><summary><b>1. Créer le raccourci « iBiFit Sync »</b></summary>
         <ol class="steps">
           <li>App <b>Raccourcis</b> → <b>+</b> → nomme-le <b>iBiFit Sync</b>.</li>
-          <li>Ajoute <b>Rechercher des échantillons de santé</b> : type <b>Entraînements</b>, filtre <b>Date de début</b> « au cours des <b>7</b> derniers jours ».</li>
-          <li>Ajoute <b>Répéter avec chaque élément</b>. Dedans, ajoute <b>Texte</b> et écris, en insérant les variables de l'<i>Élément répété</i> :<br>
-            <code>Date de début~Date de fin~Type~Distance~Énergie active</code><br>
+          <li><b>Rechercher des échantillons de santé</b> : type <b>Distance de marche et de course</b>, filtre <b>Date de début</b> « au cours des <b>2</b> derniers jours ».</li>
+          <li><b>Répéter avec chaque élément</b>. Dedans, une action <b>Texte</b> avec les variables de l'<i>Élément répété</i> :<br>
+            <code>Date de début~Date de fin~Valeur~Source</code><br>
             <span class="muted">(pour les deux dates : touche la variable → format <b>ISO 8601</b>, avec l'heure)</span></li>
-          <li>Après la répétition : <b>Combiner le texte</b> avec le séparateur personnalisé <code>;</code></li>
-          <li><b>Encoder en URL</b> (le texte combiné).</li>
-          <li><b>Ouvrir les URL</b> : <code style="word-break:break-all">${esc(location.href.split("#")[0])}#/sync?w=</code> suivi de la variable <i>Texte encodé</i>.</li>
+          <li>Après la répétition : <b>Combiner le texte</b> (<i>Résultats de la répétition</i>) avec le séparateur personnalisé <code>;</code>, puis <b>Encoder en URL</b>.</li>
+          <li><b>Pour les kcal</b> : refais les étapes 2 à 4 avec le type <b>Énergie active</b>.</li>
+          <li><b>Ouvrir les URL</b> : <code style="word-break:break-all">${esc(location.href.split("#")[0])}#/sync?d=</code> + <i>texte encodé (distance)</i> + <code>&amp;e=</code> + <i>texte encodé (énergie)</i>.</li>
         </ol>
-        <div class="small muted">Lance-le une fois à la main : iOS te demande l'accès à Santé (autorise tout), puis iBiFit s'ouvre et affiche les séances.</div>
+        <div class="small muted">Lance-le une fois à la main : iOS te demande l'accès à Santé (autorise tout). iBiFit retrouve tes séances tout seul : distance continue pendant au moins 8 min. Seules les mesures de la montre sont prises en compte.${settings.lastSyncInfo ? ` Dernière réception : ${esc(settings.lastSyncInfo)}.` : ""}</div>
       </details>
       <details class="mini"><summary><b>2. L'automatiser à 8 h</b></summary>
         <ol class="steps">

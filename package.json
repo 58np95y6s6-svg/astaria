@@ -1,10 +1,7 @@
 {
-  "name": "ibibet",
+  "name": "ibifit",
   "private": true,
   "type": "module",
-  "description": "Projections NBA par joueur, matchup défensif et détection de value bets",
-  "scripts": {
-    "test": "node --test tests/*.test.mjs",
-    "update": "node scripts/update.mjs"
-  }
+  "description": "Suivi des séances de sport (Apple Watch) avec correction de distance sur tapis",
+  "scripts": { "test": "node --test tests/*.test.mjs" }
 }

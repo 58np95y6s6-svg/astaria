@@ -56,7 +56,7 @@ function runSync(q) {
   try {
     const qs = new URLSearchParams(q);
     let items, info = "";
-    if (qs.get("ds") != null) { qs.set("d", zipLists(qs.get("ds"), qs.get("de"), qs.get("dv"))); qs.set("e", zipLists(qs.get("es"), qs.get("ee"), qs.get("ev"))); }
+    if (qs.get("ds") != null) { qs.set("d", zipLists(qs.get("ds"), qs.get("de"), qs.get("dv"))); const ek = ["es", "cs", "ks"].find((k) => qs.get(k) != null) || "es", p = ek[0]; qs.set("e", zipLists(qs.get(p + "s"), qs.get(p + "e"), qs.get(p + "v"))); }
     if (qs.get("d") != null) {
       const dist = parseSamples(qs.get("d")), en = parseSamples(qs.get("e"));
       items = sessionsFromSamples(dist, en);
@@ -67,7 +67,7 @@ function runSync(q) {
     const r = mergeHealth(items);
     settings.lastSync = new Date().toISOString(); saveSettings(settings);
     viewHome();
-    toast(r.added ? `${r.added} nouvelle${r.added > 1 ? "s" : ""} séance${r.added > 1 ? "s" : ""} synchronisée${r.added > 1 ? "s" : ""} ❤️` : items.length ? "Synchro faite : tout est à jour ✓" : info ? `Aucune séance trouvée (${info})` : `Synchro : rien reçu (${[...qs.keys()].join(", ") || "lien vide"})`);
+    toast(r.added ? `${r.added} nouvelle${r.added > 1 ? "s" : ""} séance${r.added > 1 ? "s" : ""} synchronisée${r.added > 1 ? "s" : ""} ❤️` : r.updated ? `Synchro faite : ${r.updated} séance${r.updated > 1 ? "s" : ""} complétée${r.updated > 1 ? "s" : ""} ✓` : items.length ? "Synchro faite : tout est à jour ✓" : info ? `Aucune séance trouvée (${info})` : `Synchro : rien reçu (${[...qs.keys()].join(", ") || "lien vide"})`);
   } catch (e) { viewHome(); toast(e.message); }
 }
 async function pasteSync() {

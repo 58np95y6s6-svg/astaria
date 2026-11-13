@@ -50,7 +50,7 @@ export async function renderStory(o) {
   ctx.fillStyle = "#fff"; ctx.fillText("iBi", 70, 190);
   const wb = ctx.measureText("iBi").width;
   ctx.fillStyle = "#f4555a"; ctx.fillText("Fit", 70 + wb, 190);
-  ctx.font = `600 34px ${FONT}`; ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.textAlign = "right"; fit(ctx, o.date || "", 720, 34, 600);
   ctx.fillText(o.date || "", W - 70, 188); ctx.textAlign = "left";
 
   // Illustration (paysage, rognée au centre)

@@ -94,3 +94,12 @@ test("comparaison à un lieu connu", () => {
   assert.equal(nextChallenge(50).place.id, "tmb");
   for (const p of PLACES) assert.match(placeSVG(p, 0.4), /^<svg/);
 });
+
+import { spanSec } from "../js/core.js";
+test("plage horaire « 17:02-17:28 » → début, fin, durée", () => {
+  const r = parseWorkoutText("Marche en intérieur\n17:02-17:28\nDistance\n0,80KM");
+  assert.deepEqual([r.startTime, r.endTime, r.durationSec], ["17:02", "17:28", 26 * 60]);
+  const r2 = parseWorkoutText(`Marche en intérieur\n17:02-17:28\nTemps d'entraînement Distance\n0:25:12 0,80KM`);
+  assert.equal(r2.durationSec, 1512); // la durée affichée prime
+  assert.equal(spanSec("23:40", "00:10"), 1800);
+});

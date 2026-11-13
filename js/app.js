@@ -1,4 +1,4 @@
-import { ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
+import { spanSec, ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
 import { PLACES, placesFor, pickFor, placeSVG, ratioText, nextChallenge, challengePlaces } from "./places.js";
 import { renderStory, shareBlob } from "./story.js";
 import { loadWorkouts, loadSettings, saveSettings, upsertWorkout, deleteWorkout, exportAll, importAll } from "./store.js";
@@ -14,6 +14,9 @@ const pad = (n) => String(n).padStart(2, "0");
 const localInput = (d) => { const x = new Date(d); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}T${pad(x.getHours())}:${pad(x.getMinutes())}`; };
 const dayLabel = (d) => new Date(d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 const timeLabel = (d) => new Date(d).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+// « 06:42 → 07:30 » : début et fin d'une séance
+const spanLabel = (start, sec) => (sec > 0 ? `${timeLabel(start)} → ${timeLabel(new Date(start).getTime() + sec * 1000)}` : timeLabel(start));
+const endOf = (date, sec) => { if (!date || !(sec > 0)) return ""; const e = new Date(new Date(date).getTime() + sec * 1000); return `${pad(e.getHours())}:${pad(e.getMinutes())}`; };
 
 function toast(msg) {
   const t = document.createElement("div");
@@ -27,7 +30,7 @@ let settings = loadSettings();
 // ---------- routeur ----------
 const routes = [
   [/^#?\/?$/, viewHome],
-  [/^#\/import\?(.*)$/, (q) => { draft = { ...emptyDraft(), ...fromParsed(parseImportParams(q)) }; addOpen = true; history.replaceState(null, "", "#/"); viewHome(); toast("Séance reçue : vérifie puis enregistre"); }],
+  [/^#\/import\?(.*)$/, (q) => { draft = { ...emptyDraft(), ...fromParsed(parseImportParams(q)) }; draft.end = endOf(draft.date, (numIn(draft.min) || 0) * 60 + (numIn(draft.sec) || 0)); addOpen = true; history.replaceState(null, "", "#/"); viewHome(); toast("Séance reçue : vérifie puis enregistre"); }],
   [/^#\/stats$/, viewStats],
   [/^#\/reglages$/, viewSettings],
 ];
@@ -50,8 +53,9 @@ let addOpen = false;
 let openId = null; // séance dépliée dans la liste
 let editDraft = null;
 
-function fromParsed(p) {
+function fromParsed(p, base = localInput(Date.now())) {
   const d = {};
+  if (p.startTime && !p.date) d.date = `${String(base).slice(0, 10)}T${p.startTime}`;
   if (p.type) d.type = p.type;
   if (p.durationSec != null) { d.min = String(Math.floor(p.durationSec / 60)); d.sec = String(p.durationSec % 60); }
   if (p.watchKm != null) d.watchKm = String(p.watchKm).replace(".", ",");
@@ -78,7 +82,8 @@ function previewHTML(d) {
   const segInfo = segs.length ? `<div class="seg-prev">${segProfile(segs)}<div class="small"><b>${km(segmentsKm(segs))}</b> d'après les paliers · ${fmtDuration(segmentsMin(segs) * 60)}${w.durationSec && Math.abs(segmentsMin(segs) * 60 - w.durationSec) > 90 ? ` <span class="down">(durée saisie : ${fmtDuration(w.durationSec)})</span>` : ""}</div></div>` : "";
   if (!(w.durationSec > 0) || !(w.watchKm > 0 || w.realKm > 0 || segs.length)) return segInfo + `<div class="small muted">Renseigne au moins la durée et la distance de la montre (ou tes paliers de vitesse).</div>`;
   const c = corrected(w, settings);
-  return `<div class="row between"><div><div class="small muted">Distance retenue</div><div class="big num">${km(c.km)}</div></div>
+  return `<div class="small muted" style="margin-bottom:6px">🕒 ${spanLabel(w.date, w.durationSec)} · ${fmtDuration(w.durationSec)}</div>
+    <div class="row between"><div><div class="small muted">Distance retenue</div><div class="big num">${km(c.km)}</div></div>
     <div style="text-align:right"><div class="small muted">Allure · vitesse</div><div class="big num" style="font-size:20px">${fmtPace(c.paceSec)}</div><div class="small num">${c.speed != null ? c.speed.toLocaleString("fr-FR") : "–"} km/h</div></div></div>
     ${segInfo}
     <div class="small muted" style="margin-top:6px">${c.source === "paliers" ? `Calculée avec tes paliers de vitesse${w.watchKm ? ` (montre ${km(w.watchKm)}, rapport ×${c.factor.toLocaleString("fr-FR")})` : ""}` : c.source === "réel" ? `Distance réelle saisie (montre ${km(w.watchKm)}, rapport ×${c.factor.toLocaleString("fr-FR")})`
@@ -90,7 +95,8 @@ function formHTML(d, p) {
   const f = (k, label, ph = "", cls = "") => `<div class="${cls}"><label>${label}</label><input type="text" inputmode="decimal" autocomplete="off" data-f="${p}" data-k="${k}" value="${esc(d[k])}" placeholder="${ph}"></div>`;
   return `<div class="form">
       <div class="full"><label>Activité</label><select data-f="${p}" data-k="type">${opt}</select></div>
-      <div class="full"><label>Date et heure</label><input type="datetime-local" data-f="${p}" data-k="date" value="${esc(d.date)}"></div>
+      <div class="full"><label>Début</label><input type="datetime-local" data-f="${p}" data-k="date" value="${esc(d.date)}"></div>
+      <div class="full"><label>Fin</label><input type="time" data-f="${p}" data-k="end" value="${esc(d.end)}"></div>
       <div class="full"><label>Durée totale</label><div class="dur"><input type="text" inputmode="numeric" autocomplete="off" data-f="${p}" data-k="min" value="${esc(d.min)}" placeholder="min"><span>min</span><input type="text" inputmode="numeric" autocomplete="off" data-f="${p}" data-k="sec" value="${esc(d.sec)}" placeholder="s"><span>s</span></div></div>
       ${f("watchKm", "Distance montre (km)", "0,80")}
       ${f("realKm", "Distance réelle (facultatif)", "tapis")}
@@ -103,8 +109,18 @@ function formHTML(d, p) {
 }
 
 function wireForm(p, d, onChange) {
+  const q = (k) => document.querySelector(`[data-f="${p}"][data-k="${k}"]`);
   document.querySelectorAll(`[data-f="${p}"]`).forEach((el) => el.addEventListener("input", () => {
     d[el.dataset.k] = el.value;
+    const k = el.dataset.k;
+    if (k === "end") {
+      // Heure de fin saisie → durée recalculée
+      const sec = spanSec(String(d.date || "").slice(11, 16), d.end);
+      if (sec > 0) { d.min = String(Math.floor(sec / 60)); d.sec = "0"; if (q("min")) q("min").value = d.min; if (q("sec")) q("sec").value = d.sec; }
+    } else if (k === "min" || k === "sec" || k === "date") {
+      d.end = endOf(d.date, (numIn(d.min) || 0) * 60 + (numIn(d.sec) || 0));
+      if (q("end")) q("end").value = d.end;
+    }
     const pv = document.querySelector(`[data-preview="${p}"]`);
     if (pv) pv.innerHTML = previewHTML(d);
     onChange?.();
@@ -118,7 +134,7 @@ function workoutCard(w) {
   const open = openId === w.id;
   return `<div class="wk" data-open="${w.id}">
     <div class="wk-head"><div class="wk-ico">${a.icon}</div>
-      <div class="grow"><b>${esc(a.label)}</b><div class="small muted">${timeLabel(w.date)}${c.source !== "montre" ? ` · montre ${km(w.watchKm)} → ${c.source === "réel" ? "réel" : `×${c.factor.toLocaleString("fr-FR")}`}` : ""}</div></div>
+      <div class="grow"><b>${esc(a.label)}</b><div class="small muted">${spanLabel(w.date, w.durationSec)}${c.source !== "montre" ? ` · montre ${km(w.watchKm)} → ${c.source === "réel" ? "réel" : `×${c.factor.toLocaleString("fr-FR")}`}` : ""}</div></div>
       ${c.source !== "montre" ? `<span class="chip good">corrigé</span>` : ""}</div>
     <div class="wk-stats">
       <div><b class="num">${km(c.km)}</b><span>distance</span></div>
@@ -172,7 +188,7 @@ function openWorkoutStory(w) {
   const first = compareFor(w, c);
   const cands = [first, ...placesFor(c.km).filter((x) => x.place.id !== first.place.id)];
   openStory(cands, (cand) => ({
-    place: cand.place, ratio: cand.ratio, date: dateStory(w.date),
+    place: cand.place, ratio: cand.ratio, date: `${dateStory(w.date)} · ${spanLabel(w.date, w.durationSec).replace(" → ", "–")}`,
     kicker: "Aujourd'hui j'ai parcouru l'équivalent de",
     subtitle: `${km(c.km)} · ${a.label.toLowerCase()}`,
     stats: [[km(c.km, c.km >= 10 ? 1 : 2).replace(" km", ""), "km"], [fmtDuration(w.durationSec), "durée"], [fmtPace(c.paceSec).replace(" /km", ""), "allure /km"], [int(w.kcalActive), "kcal"]],
@@ -265,7 +281,8 @@ function viewHome() {
     try {
       const text = await ocrImage(file, (m) => { st.textContent = m; });
       const p = parseWorkoutText(text);
-      draft = { ...draft, ...fromParsed(p) };
+      draft = { ...draft, ...fromParsed(p, draft.date) };
+      draft.end = endOf(draft.date, (numIn(draft.min) || 0) * 60 + (numIn(draft.sec) || 0));
       addOpen = true;
       viewHome();
       const s2 = document.getElementById("shotStatus");
@@ -287,7 +304,7 @@ function viewHome() {
     if (openId === id) { openId = null; editDraft = null; } else {
       const w = loadWorkouts().find((x) => x.id === id);
       openId = id;
-      editDraft = { id: w.id, type: w.type, date: localInput(w.date), min: String(Math.floor(w.durationSec / 60)), sec: String(Math.round(w.durationSec % 60)),
+      editDraft = { id: w.id, type: w.type, date: localInput(w.date), end: endOf(w.date, w.durationSec), min: String(Math.floor(w.durationSec / 60)), sec: String(Math.round(w.durationSec % 60)),
         watchKm: w.watchKm ?? "", realKm: w.realKm ?? "", segText: segmentsText(w.segments), placeId: w.placeId, kcalActive: w.kcalActive ?? "", kcalTotal: w.kcalTotal ?? "", hrAvg: w.hrAvg ?? "", note: w.note || "" };
     }
     viewHome();

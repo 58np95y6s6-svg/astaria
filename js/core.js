@@ -133,6 +133,13 @@ export function parseWorkoutText(text) {
     return null;
   };
 
+  // Plage horaire « 17:02-17:28 » (en-tête de la séance dans l'app Forme)
+  const range = /(?:^|\s)(\d{1,2})[:h](\d{2})\s*[-–—]\s*(\d{1,2})[:h](\d{2})(?:\s|$)/m.exec(t);
+  if (range) {
+    out.startTime = `${range[1].padStart(2, "0")}:${range[2]}`;
+    out.endTime = `${range[3].padStart(2, "0")}:${range[4]}`;
+  }
+
   // Carte « Exercices » de l'app Santé (Résumé) : « 48 min | 255 kcal | 2,9 km » sur une ligne.
   const KCAL = "k[ce][ae]l";
   const card = new RegExp(`(?:(\\d{1,2})\\s*h\\s*)?(\\d{1,3})\\s*min\\b.*?(\\d{1,4})\\s*${KCAL}.*?(\\d+(?:[.,]\\d+)?)\\s*km\\b`).exec(t);
@@ -166,8 +173,17 @@ export function parseWorkoutText(text) {
   m = near(/frequence cardiaque moy|freq\.? card(?:iaque)? moy|fc moy|avg\.? heart|heart rate/, /(\d{2,3})\s*(?:bpm|bat)/);
   if (m) out.hrAvg = +m[1];
 
+  if (out.durationSec == null && out.startTime) out.durationSec = spanSec(out.startTime, out.endTime);
   for (const k of ["durationSec", "watchKm", "kcalActive", "kcalTotal", "hrAvg"]) if (out[k] != null) out.found.push(k);
   return out;
+}
+
+// Écart entre deux heures « HH:MM » (passe minuit si besoin).
+export function spanSec(a, b) {
+  const m = (x) => { const r = /^(\d{1,2}):(\d{2})$/.exec(String(x || "").trim()); return r ? +r[1] * 60 + +r[2] : null; };
+  const x = m(a), y = m(b);
+  if (x == null || y == null) return null;
+  return (((y - x) + 1440) % 1440) * 60;
 }
 
 // Import par lien (Raccourci iPhone) : #/import?type=…&min=…&km=…&kcal=…

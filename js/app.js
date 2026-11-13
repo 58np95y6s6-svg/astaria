@@ -72,11 +72,34 @@ function runSync(q) {
 }
 async function pasteSync() {
   let t = "";
-  try { t = await navigator.clipboard.readText(); } catch { toast("Accès au presse-papiers refusé"); return; }
+  try { t = await navigator.clipboard.readText(); } catch { t = ""; }
+  if (!t) { pasteBox(); return; }
+  useSyncText(t);
+}
+function useSyncText(t) {
   const i = t.indexOf("sync?");
   const q = i >= 0 ? t.slice(i + 5) : /(^|&)(ds|d|w)=/.test(t) ? t : null;
   if (!q) { toast("Presse-papiers vide : lance d'abord le raccourci iBiFit Sync"); return; }
   runSync(q.trim());
+}
+
+// Coller à la main (si iOS refuse la lecture directe du presse-papiers)
+function pasteBox() {
+  const el = document.createElement("div");
+  el.className = "modal";
+  el.innerHTML = `<div class="modal-sheet">
+    <div class="row between"><b style="font-size:17px">Coller la synchro</b><button class="icon-close" data-x aria-label="Fermer">✕</button></div>
+    <div class="small muted" style="margin:8px 0">Touche longuement la case ci-dessous, puis <b>Coller</b>.</div>
+    <textarea id="pasteArea" rows="4" style="width:100%;font-size:16px;border:0;border-radius:12px;background:var(--soft);padding:12px" placeholder="Touche longuement ici → Coller"></textarea>
+    <button class="btn primary block" id="pasteOk" style="margin-top:10px">Synchroniser</button>
+  </div>`;
+  document.body.appendChild(el);
+  const close = () => el.remove();
+  el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-x]")) close(); });
+  const ta = el.querySelector("#pasteArea");
+  ta.addEventListener("input", () => { if (ta.value.includes("sync?")) { close(); useSyncText(ta.value); } });
+  el.querySelector("#pasteOk").addEventListener("click", () => { close(); useSyncText(ta.value); });
+  setTimeout(() => ta.focus(), 50);
 }
 
 // ---------- formulaire de séance (ajout / modification) ----------

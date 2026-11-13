@@ -50,7 +50,7 @@ export const PLACES = [
   { id: "monza", laps: "du circuit de Monza", short: "Monza", where: "Italie", flag: "🇮🇹", km: 5.793, scene: "circuit", alt: 2, quip: "Le temple de la vitesse… presque." },
   { id: "suzuka", laps: "du circuit de Suzuka", short: "Suzuka", where: "Japon", flag: "🇯🇵", km: 5.807, scene: "circuit", alt: 6, quip: "Le seul circuit en 8 : tu t'es croisé toi-même." },
   { id: "ricard", laps: "du circuit Paul-Ricard", short: "Paul-Ricard", where: "Le Castellet", flag: "🇫🇷", km: 5.842, scene: "circuit", alt: 4 },
-  { id: "karting", laps: "de piste de karting", short: "Piste de karting", where: "Karting du coin", flag: "🏎️", km: 1.0, scene: "circuit", alt: 5, quip: "Sans se faire doubler par un enfant de 10 ans." },
+  { id: "karting", laps: "de piste de karting", short: "Piste de karting", where: "Karting des 24 Heures, Le Mans", flag: "🏎️", km: 1.384, scene: "circuit", alt: 5, quip: "Sans se faire doubler par un enfant de 10 ans." },
 
   // --- Tours de terrain / aller-retours ---
   { id: "foottour", laps: "de terrain de foot", short: "Tours de terrain de foot", where: "Parc des Princes", flag: "⚽", km: 0.35, scene: "field", field: "foot", quip: "Échauffement validé, coach." },

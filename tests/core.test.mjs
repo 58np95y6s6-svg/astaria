@@ -191,3 +191,14 @@ test("synchro par échantillons : retrouve la séance de tapis", () => {
   assert.equal(s.length, 1);
   assert.deepEqual([s[0].type, s[0].durationSec, s[0].watchKm, s[0].kcalActive, s[0].date], ["walk_treadmill", 2880, 2.9, 254, iso(t0)]);
 });
+
+import { zipLists } from "../js/core.js";
+test("synchro sans boucle : listes parallèles + dates à la française", () => {
+  const starts = [], ends = [], vals = [];
+  const t0 = new Date(2026, 10, 13, 6, 42, 0).getTime();
+  const fr = (ms) => { const d = new Date(ms); return `${d.getDate()} nov. 2026 à ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`; };
+  for (let i = 0; i < 96; i++) { starts.push(fr(t0 + i * 30e3)); ends.push(fr(t0 + (i + 1) * 30e3)); vals.push("0,0302"); }
+  const s = sessionsFromSamples(parseSamples(zipLists(starts.join(";"), ends.join(";"), vals.join(";"))));
+  assert.equal(s.length, 1);
+  assert.deepEqual([s[0].durationSec, s[0].watchKm], [2880, 2.9]);
+});

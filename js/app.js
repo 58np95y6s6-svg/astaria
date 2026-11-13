@@ -1,4 +1,4 @@
-import { parseSyncParam, parseSamples, sessionsFromSamples, spanSec, ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
+import { zipLists, parseSyncParam, parseSamples, sessionsFromSamples, spanSec, ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
 import { PLACES, placesFor, pickFor, placeSVG, ratioText, nextChallenge, challengePlaces } from "./places.js";
 import { renderStory, shareBlob } from "./story.js";
 import { SAT, satCanvas } from "./sat.js";
@@ -39,6 +39,7 @@ const routes = [
     try {
       const qs = new URLSearchParams(q);
       let items, info = "";
+      if (qs.get("ds") != null) { qs.set("d", zipLists(qs.get("ds"), qs.get("de"), qs.get("dv"))); qs.set("e", zipLists(qs.get("es"), qs.get("ee"), qs.get("ev"))); }
       if (qs.get("d") != null) {
         const dist = parseSamples(qs.get("d")), en = parseSamples(qs.get("e"));
         items = sessionsFromSamples(dist, en);

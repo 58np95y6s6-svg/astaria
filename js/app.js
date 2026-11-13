@@ -88,7 +88,7 @@ function pasteBox() {
   const el = document.createElement("div");
   el.className = "modal";
   el.innerHTML = `<div class="modal-sheet">
-    <div class="row between"><b style="font-size:17px">Coller la synchro</b><button class="icon-close" data-x aria-label="Fermer">✕</button></div>
+    <div class="row between"><b style="font-size:17px">🔄 Synchro Santé du jour</b><button class="icon-close" data-x aria-label="Fermer">✕</button></div>
     <div class="small muted" style="margin:8px 0">Touche longuement la case ci-dessous, puis <b>Coller</b>.</div>
     <textarea id="pasteArea" rows="4" style="width:100%;font-size:16px;border:0;border-radius:12px;background:var(--soft);padding:12px" placeholder="Touche longuement ici → Coller"></textarea>
     <button class="btn primary block" id="pasteOk" style="margin-top:10px">Synchroniser</button>
@@ -325,7 +325,7 @@ function viewHome() {
       <div class="kpi"><b class="num">${thisWeek.length}</b><span>séance${thisWeek.length > 1 ? "s" : ""}</span></div>
     </div>
     <button class="btn block sync-btn" id="pasteSync">🔄 Récupérer la synchro Santé</button>
-    <details class="acc" id="addAcc"${addOpen || !list.length ? " open" : ""}>
+    <details class="acc" id="addAcc"${addOpen ? " open" : ""}>
       <summary><span class="acc-ico">+</span><div class="grow"><b>Ajouter une séance</b><div class="small muted">capture Forme / Santé, lien Raccourci ou saisie</div></div><span class="chev" aria-hidden="true"></span></summary>
       <div class="acc-body">
         <label class="btn primary block" style="margin:0;color:#fff;font-size:15px">📸 Importer une capture de la séance<input type="file" accept="image/*" id="shot" hidden></label>
@@ -742,6 +742,18 @@ new MutationObserver(() => {
 }).observe($app, { childList: true, subtree: true });
 
 router();
+
+// Chaque jour après 8 h : à l'ouverture de l'app, la fenêtre « Coller la synchro » s'affiche toute seule (une fois par jour).
+function autoSyncPrompt() {
+  if (document.visibilityState !== "visible" || !settings.lastSync) return; // seulement si la synchro a déjà été mise en place
+  const now = new Date(), today = now.toDateString();
+  if (now.getHours() < 8 || new Date(settings.lastSync).toDateString() === today || settings.syncPromptDay === today) return;
+  if (document.querySelector(".modal") || (location.hash || "#/") !== "#/") return;
+  settings.syncPromptDay = today; saveSettings(settings);
+  pasteBox();
+}
+document.addEventListener("visibilitychange", () => setTimeout(autoSyncPrompt, 300));
+setTimeout(autoSyncPrompt, 600);
 
 // ---------- comportement d'app native ----------
 ["gesturestart", "gesturechange", "gestureend"].forEach((t) => document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));

@@ -145,3 +145,4 @@ input[type=range] { touch-action: none; }
 .pchip { flex: none; border: 0; background: var(--card); box-shadow: var(--shadow); border-radius: 999px; padding: 8px 12px; font-weight: 700; font-size: 13px; cursor: pointer; color: var(--text); }
 .pchip.on { background: var(--navy); color: #fff; }
 .btn[disabled] { opacity: .5; }
+.cmp-quip { font-size: 12px; font-style: italic; color: var(--navy-muted); margin-top: 2px; }

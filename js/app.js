@@ -1,5 +1,5 @@
 import { ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
-import { PLACES, placesFor, placeSVG, ratioText, nextChallenge } from "./places.js";
+import { PLACES, placesFor, pickFor, placeSVG, ratioText, nextChallenge, challengePlaces } from "./places.js";
 import { renderStory, shareBlob } from "./story.js";
 import { loadWorkouts, loadSettings, saveSettings, upsertWorkout, deleteWorkout, exportAll, importAll } from "./store.js";
 import { ocrImage } from "./ocr.js";
@@ -139,9 +139,8 @@ function workoutCard(w) {
 
 // ---------- Comparaison à un lieu connu ----------
 function compareFor(w, c) {
-  const list = placesFor(c.km);
-  const chosen = w.placeId && list.find((x) => x.place.id === w.placeId);
-  return chosen || list[0];
+  const p = w.placeId && PLACES.find((x) => x.id === w.placeId);
+  return p ? { place: p, ratio: c.km / p.km } : pickFor(c.km, w.id);
 }
 function compareStrip(w, c) {
   if (!(c.km > 0)) return "";
@@ -149,7 +148,7 @@ function compareStrip(w, c) {
   const rt = ratioText(ratio, place);
   return `<div class="cmp">
     <div class="cmp-img">${placeSVG(place, ratio, { id: `t${w.id}` })}</div>
-    <div class="grow"><div class="small muted">L'équivalent de</div><b class="cmp-big">${esc(rt.big)}</b> <span class="cmp-line">${esc(rt.line)}</span></div>
+    <div class="grow"><div class="small muted">L'équivalent de</div><b class="cmp-big">${esc(rt.big)}</b> <span class="cmp-line">${esc(rt.line)}</span>${place.quip ? `<div class="cmp-quip">${esc(place.quip)}</div>` : ""}</div>
     <button class="story-btn" data-story="${w.id}" aria-label="Partager en story">${IG}</button>
   </div>`;
 }
@@ -197,7 +196,7 @@ function openStory(cands, build, onPick) {
   el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-x]")) close(); });
   const chips = el.querySelector(".place-chips");
   const drawChips = () => {
-    chips.innerHTML = cands.slice(0, 8).map((x, j) => `<button class="pchip${j === i ? " on" : ""}" data-pi="${j}">${x.place.flag} ${esc(x.place.short)}</button>`).join("");
+    chips.innerHTML = cands.slice(0, 40).map((x, j) => `<button class="pchip${j === i ? " on" : ""}" data-pi="${j}">${x.place.flag} ${esc(x.place.short)}</button>`).join("");
     chips.querySelectorAll("[data-pi]").forEach((b) => b.addEventListener("click", () => { if (busy) return; i = +b.dataset.pi; onPick?.(cands[i]); draw(); }));
   };
   const draw = async () => {
@@ -344,7 +343,7 @@ function viewStats() {
   const allKm = all.reduce((t, w) => t + corrected(w, settings).km, 0);
   const ch = nextChallenge(allKm);
   const chRt = ratioText(ch.ratio, ch.place);
-  const done = PLACES.filter((p) => p.km <= allKm);
+  const done = challengePlaces().filter((p) => p.km <= allKm);
   $app.innerHTML = `
     ${all.length ? `<div class="challenge">
       <div class="ch-img">${placeSVG(ch.place, ch.ratio, { id: "ch" })}<span class="ch-where">📍 ${esc(ch.place.where)} ${ch.place.flag}</span></div>
@@ -377,7 +376,7 @@ function viewStats() {
       <div class="small muted">Plus la courbe descend, plus tu vas vite. Calculée avec la distance corrigée.</div>
     </div>`;
   document.getElementById("chStory")?.addEventListener("click", () => {
-    const cands = [ch, ...PLACES.filter((p) => p.id !== ch.place.id).map((p) => ({ place: p, ratio: allKm / p.km })).sort((a, b) => Math.abs(Math.log(a.ratio)) - Math.abs(Math.log(b.ratio)))];
+    const cands = [ch, ...placesFor(allKm).filter((x) => x.place.id !== ch.place.id)];
     const allSec = all.reduce((t, w) => t + (w.durationSec || 0), 0);
     openStory(cands, (cand) => ({
       place: cand.place, ratio: cand.ratio, date: dateStory(Date.now()),

@@ -1,5 +1,5 @@
 // Image de story Instagram (1080 × 1920) : vue aérienne du lieu + trajet, comparaison, stats.
-import { placeSVG, ratioText } from "./places.js";
+import { placeSVG, ratioText, lenLabel } from "./places.js";
 
 const W = 1080, H = 1920;
 const FONT = `-apple-system, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif`;
@@ -54,7 +54,7 @@ export async function renderStory(o) {
   ctx.fillText(o.date || "", W - 70, 188); ctx.textAlign = "left";
 
   // Illustration (paysage, rognée au centre)
-  const X = 60, Y = 236, S = 960, SH = 860, RAD = 64;
+  const X = 60, Y = 236, S = 960, SH = 800, RAD = 64;
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = 60; ctx.shadowOffsetY = 24;
   rr(ctx, X, Y, S, SH, RAD); ctx.fillStyle = "#1e2342"; ctx.fill();
@@ -65,7 +65,7 @@ export async function renderStory(o) {
   ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 3; rr(ctx, X, Y, S, SH, RAD); ctx.stroke();
 
   // Pastille : lieu, ville, longueur
-  const chip = `${o.place.flag}  ${o.place.short} · ${o.place.km.toLocaleString("fr-FR")} km`;
+  const chip = `${o.place.flag}  ${o.place.short} · ${lenLabel(o.place.km)}`;
   fit(ctx, chip, S - 160, 34, 700);
   const cw = ctx.measureText(chip).width + 56;
   ctx.fillStyle = "rgba(15,18,42,.7)"; rr(ctx, X + 30, Y + SH - 104, cw, 72, 36); ctx.fill();
@@ -82,7 +82,13 @@ export async function renderStory(o) {
   y += 96;
   ctx.fillStyle = "#fff"; fit(ctx, rt.line, 940, 62);
   ctx.fillText(rt.line, 70, y);
-  y += 66;
+  if (o.place.quip) {
+    y += 56;
+    ctx.fillStyle = "rgba(255,255,255,.8)"; fit(ctx, o.place.quip, 940, 36, 500);
+    ctx.font = ctx.font.replace(/^500/, "italic 500");
+    ctx.fillText(o.place.quip, 70, y);
+  }
+  y += 60;
   ctx.font = `700 40px ${FONT}`; ctx.fillStyle = "#ff7a7e";
   fit(ctx, o.subtitle || "", 940, 40, 700);
   ctx.fillText(o.subtitle || "", 70, y);

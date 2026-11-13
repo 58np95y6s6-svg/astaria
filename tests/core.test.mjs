@@ -79,10 +79,14 @@ test("paliers de vitesse : « 5 min à 3,5 puis 40min à 6 »", () => {
   assert.equal(corrected({ type: "walk_treadmill", watchKm: 2.9, realKm: 4, durationSec: 2700, segments: segs }).km, 4);
 });
 
-import { placesFor, ratioText, nextChallenge, placeSVG, PLACES } from "../js/places.js";
+import { placesFor, pickFor, ratioText, nextChallenge, placeSVG, PLACES } from "../js/places.js";
 test("comparaison à un lieu connu", () => {
-  const best = placesFor(4.35)[0];
-  assert.ok(best.ratio > 0.5 && best.ratio < 2.5, best.place.id);
+  const list = placesFor(4.35);
+  assert.ok(list.length >= 30, `${list.length} comparaisons`);
+  assert.ok(list[0].ratio > 0.5 && list[0].ratio < 2.5, list[0].place.id);
+  assert.ok(PLACES.length >= 50);
+  assert.deepEqual(ratioText(4.35 / 0.00065, PLACES.find((p) => p.id === "baguette")), { big: (6692).toLocaleString("fr-FR"), line: "baguettes mises bout à bout" });
+  assert.ok(pickFor(4.35, "a") && pickFor(4.35, "b"));
   assert.deepEqual(ratioText(2.9 / 2.74, PLACES.find((p) => p.id === "goldengate")), { big: "1,1×", line: "le Golden Gate Bridge" });
   assert.deepEqual(ratioText(0.8, PLACES.find((p) => p.id === "wall")), { big: "80 %", line: "de la Grande Muraille de Chine" });
   assert.equal(ratioText(0.5, PLACES.find((p) => p.id === "centralpark")).line, "de Central Park");

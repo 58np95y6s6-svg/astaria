@@ -54,7 +54,7 @@ export async function renderStory(o) {
   ctx.fillText(o.date || "", W - 70, 188); ctx.textAlign = "left";
 
   // Illustration (paysage, rognée au centre)
-  const X = 60, Y = 236, S = 960, SH = 800, RAD = 64;
+  const X = 60, Y = 236, S = 960, SH = o.food ? 720 : 800, RAD = 64;
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = 60; ctx.shadowOffsetY = 24;
   rr(ctx, X, Y, S, SH, RAD); ctx.fillStyle = "#1e2342"; ctx.fill();
@@ -92,6 +92,16 @@ export async function renderStory(o) {
   ctx.font = `700 40px ${FONT}`; ctx.fillStyle = "#ff7a7e";
   fit(ctx, o.subtitle || "", 940, 40, 700);
   ctx.fillText(o.subtitle || "", 70, y);
+
+  // Bandeau « calories = nourriture »
+  if (o.food) {
+    const fy = y + 30, fh = 92;
+    const g2 = ctx.createLinearGradient(60, 0, 1020, 0);
+    g2.addColorStop(0, "rgba(255,154,122,.30)"); g2.addColorStop(1, "rgba(244,85,90,.22)");
+    ctx.fillStyle = g2; rr(ctx, 60, fy, 960, fh, 46); ctx.fill();
+    ctx.fillStyle = "#fff"; fit(ctx, o.food, 900, 38, 800);
+    ctx.textAlign = "center"; ctx.fillText(o.food, 540, fy + 60); ctx.textAlign = "left";
+  }
 
   // Bloc stats (verre)
   const by = 1560, bh = 170;

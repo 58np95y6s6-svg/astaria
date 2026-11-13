@@ -183,6 +183,11 @@ function segProfile(segs) {
   }).join("")}<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4555a"/><stop offset="1" stop-color="#ff9a7a"/></linearGradient></defs></svg>`;
 }
 
+// « 🔥 255 kcal = 🍦 1 McFlurry · ⚡ 2,5 Red Bull » (change avec la comparaison tirée)
+const foodLine = (kcal, seed) => {
+  const f = foodFor(kcal, seed, 2);
+  return f.length ? `🔥 ${int(kcal)} kcal = ${f.map((x) => `${x.f.e} ${foodText(x.f, x.n)}`).join(" · ")}` : "";
+};
 const dateStory = (d) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 
 function openWorkoutStory(w) {
@@ -194,6 +199,7 @@ function openWorkoutStory(w) {
     place: cand.place, ratio: cand.ratio, date: `${dateStory(w.date)} · ${spanLabel(w.date, w.durationSec).replace(" → ", "–")}`,
     kicker: "Aujourd'hui j'ai parcouru l'équivalent de",
     subtitle: `${km(c.km)} · ${a.label.toLowerCase()}`,
+    food: foodLine(w.kcalActive, cand.place.id + w.id),
     stats: [[km(c.km, c.km >= 10 ? 1 : 2).replace(" km", ""), "km"], [fmtDuration(w.durationSec), "durée"], [fmtPace(c.paceSec).replace(" /km", ""), "allure /km"], [int(w.kcalActive), "kcal"]],
   }), (cand) => { upsertWorkout({ ...w, placeId: cand.place.id }); if ((location.hash || "#/") === "#/") viewHome(); });
 }
@@ -413,6 +419,7 @@ function viewStats() {
       place: cand.place, ratio: cand.ratio, date: dateStory(Date.now()),
       kicker: "Depuis le début, j'ai parcouru l'équivalent de",
       subtitle: `${km(allKm, 1)} en ${all.length} séance${all.length > 1 ? "s" : ""}`,
+      food: foodLine(all.reduce((t, w) => t + (w.kcalActive || 0), 0), cand.place.id),
       stats: [[km(allKm, 1).replace(" km", ""), "km"], [`${Math.round(allSec / 3600)} h`, "en tout"], [String(all.length), "séances"], [int(all.reduce((t, w) => t + (w.kcalActive || 0), 0)), "kcal"]],
     }));
   });
@@ -543,12 +550,12 @@ function viewRecap() {
   });
   document.getElementById("recapStory")?.addEventListener("click", () => {
     const cands = [cmp, ...placesFor(cur.km).filter((x) => x.place.id !== cmp.place.id)];
-    const f = foods[0];
     const per = recapKind === "week" ? "Cette semaine" : recapKind === "month" ? "Ce mois-ci" : recapKind === "year" ? "Cette année" : "Depuis le début";
     openStory(cands, (cand) => ({
       place: cand.place, ratio: cand.ratio, date: recapKind === "all" ? dateStory(Date.now()) : periodLabel(recapKind, r),
       kicker: `${isCurrent || recapKind === "all" ? per : recapKind === "week" ? `Du ${periodLabel(recapKind, r).replace(" – ", " au ")}` : `En ${periodLabel(recapKind, r).toLowerCase()}`}, j'ai parcouru l'équivalent de`,
-      subtitle: `${km(cur.km, 1)}${f ? ` · 🔥 ${int(cur.kcal)} kcal = ${f.f.e} ${foodText(f.f, f.n)}` : ""}`,
+      subtitle: `${km(cur.km, 1)} en ${cur.n} séance${cur.n > 1 ? "s" : ""}`,
+      food: foodLine(cur.kcal, cand.place.id + r.start.getTime()),
       stats: [[km(cur.km, 1).replace(" km", ""), "km"], [String(cur.n), `séance${cur.n > 1 ? "s" : ""}`], [cur.sec >= 36000 ? `${Math.floor(cur.sec / 3600)} h ${pad(Math.floor((cur.sec % 3600) / 60))}` : fmtDuration(cur.sec), "durée"], [int(cur.kcal), "kcal"]],
     }));
   });

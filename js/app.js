@@ -137,8 +137,8 @@ function workoutCard(w) {
   const open = openId === w.id;
   return `<div class="wk" data-open="${w.id}">
     <div class="wk-head"><div class="wk-ico">${a.icon}</div>
-      <div class="grow"><b>${esc(a.label)}</b><div class="small muted">${spanLabel(w.date, w.durationSec)}${c.source !== "montre" ? ` · montre ${km(w.watchKm)} → ${c.source === "réel" ? "réel" : `×${c.factor.toLocaleString("fr-FR")}`}` : ""}</div></div>
-      ${c.source !== "montre" ? `<span class="chip good">corrigé</span>` : ""}</div>
+      <div class="grow"><b>${esc(a.label)}</b><div class="small muted">${spanLabel(w.date, w.durationSec)}</div></div>
+</div>
     <div class="wk-stats">
       <div><b class="num">${km(c.km)}</b><span>distance</span></div>
       <div><b class="num">${fmtDuration(w.durationSec)}</b><span>durée</span></div>
@@ -266,7 +266,7 @@ function viewHome() {
   for (const w of list) { const k = new Date(w.date).toDateString(); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(w); }
   $app.innerHTML = `
     <div class="kpis">
-      <div class="kpi"><b class="num">${km(kmWeek, 1)}</b><span>cette semaine (corrigés)</span></div>
+      <div class="kpi"><b class="num">${km(kmWeek, 1)}</b><span>cette semaine</span></div>
       <div class="kpi"><b class="num">${fmtDuration(sum(thisWeek, (w) => w.durationSec))}</b><span>temps total</span></div>
       <div class="kpi"><b class="num">${int(sum(thisWeek, (w) => w.kcalActive))}</b><span>kcal actives</span></div>
       <div class="kpi"><b class="num">${thisWeek.length}</b><span>séance${thisWeek.length > 1 ? "s" : ""}</span></div>
@@ -367,7 +367,7 @@ function viewStats() {
     r.km += c.km; r.kcal += w.kcalActive || 0; r.sec += w.durationSec || 0; r.n++;
   }
   const tot = [...per.values()].reduce((t, r) => ({ km: t.km + r.km, kcal: t.kcal + r.kcal, sec: t.sec + r.sec, n: t.n + r.n }), { km: 0, kcal: 0, sec: 0, n: 0 });
-  const metric = { km: ["Distance (km corrigés)", (r) => r.km, (v) => v.toFixed(1).replace(".", ",")], kcal: ["Kcal actives", (r) => r.kcal, (v) => Math.round(v)], min: ["Minutes", (r) => r.sec / 60, (v) => Math.round(v)] }[statsMetric];
+  const metric = { km: ["Distance (km)", (r) => r.km, (v) => v.toFixed(1).replace(".", ",")], kcal: ["Kcal actives", (r) => r.kcal, (v) => Math.round(v)], min: ["Minutes", (r) => r.sec / 60, (v) => Math.round(v)] }[statsMetric];
   // Allure moyenne par semaine (marche sur tapis, ou l'activité la plus fréquente)
   const counts = {};
   for (const w of list) counts[w.type] = (counts[w.type] || 0) + 1;
@@ -397,7 +397,7 @@ function viewStats() {
     </div>` : ""}
     <div class="tabs">${[["4", "4 semaines"], ["12", "12 semaines"], ["all", "Tout"]].map(([k, l]) => `<button data-range="${k}" class="${statsRange === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <div class="kpis" style="margin-top:6px">
-      <div class="kpi"><b class="num">${km(tot.km, 1)}</b><span>distance corrigée</span></div>
+      <div class="kpi"><b class="num">${km(tot.km, 1)}</b><span>distance</span></div>
       <div class="kpi"><b class="num">${fmtDuration(tot.sec)}</b><span>temps total</span></div>
       <div class="kpi"><b class="num">${int(tot.kcal)}</b><span>kcal actives</span></div>
       <div class="kpi"><b class="num">${tot.n}</b><span>séances · ${tot.n ? fmtPace(tot.sec / tot.km) : "–"}</span></div>
@@ -411,7 +411,7 @@ function viewStats() {
     <div class="card">
       <h2>Allure moyenne${mainType ? ` · ${esc(ACTIVITIES[mainType].label.toLowerCase())}` : ""}</h2>
       ${paceChart(keys, paceRows)}
-      <div class="small muted">Plus la courbe descend, plus tu vas vite. Calculée avec la distance corrigée.</div>
+      <div class="small muted">Plus la courbe descend, plus tu vas vite.</div>
     </div>`;
   document.getElementById("chStory")?.addEventListener("click", () => {
     const cands = [ch, ...placesFor(allKm).filter((x) => x.place.id !== ch.place.id)];

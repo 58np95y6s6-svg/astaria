@@ -87,6 +87,10 @@ test("comparaison à un lieu connu", () => {
   assert.ok(PLACES.length >= 50);
   assert.deepEqual(ratioText(4.35 / 0.00065, PLACES.find((p) => p.id === "baguette")), { big: (6692).toLocaleString("fr-FR"), line: "baguettes mises bout à bout" });
   assert.ok(pickFor(4.35, "a") && pickFor(4.35, "b"));
+  assert.deepEqual(ratioText(4.35 / 3.337, PLACES.find((p) => p.id === "monaco")), { big: "1,3", line: "tour du circuit de Monaco" });
+  assert.deepEqual(ratioText(43.5, PLACES.find((p) => p.id === "poolar")), { big: "44", line: "aller-retours en piscine olympique" });
+  assert.equal(ratioText(4.35 / 0.346, PLACES.find((p) => p.id === "foottour")).line, "tours de terrain de foot");
+  assert.ok(PLACES.length >= 70);
   assert.deepEqual(ratioText(2.9 / 2.74, PLACES.find((p) => p.id === "goldengate")), { big: "1,1×", line: "le Golden Gate Bridge" });
   assert.deepEqual(ratioText(0.8, PLACES.find((p) => p.id === "wall")), { big: "80 %", line: "de la Grande Muraille de Chine" });
   assert.equal(ratioText(0.5, PLACES.find((p) => p.id === "centralpark")).line, "de Central Park");

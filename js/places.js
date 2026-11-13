@@ -12,20 +12,20 @@ export const PLACES = [
   { id: "goldengate", name: "le Golden Gate Bridge", short: "Golden Gate", where: "San Francisco", flag: "🇺🇸", km: 2.74, scene: "bridge", color: "#d2412f" },
   { id: "croisette", name: "la Croisette", short: "La Croisette", where: "Cannes", flag: "🇫🇷", km: 2.8, scene: "coast", quip: "Tapis rouge non fourni." },
   { id: "re", name: "le pont de l'île de Ré", short: "Pont de l'île de Ré", where: "La Rochelle", flag: "🇫🇷", km: 2.93, scene: "bridge", color: "#d9d4ca" },
-  { id: "monaco", name: "le circuit de Monaco", short: "Circuit de Monaco", where: "Monte-Carlo", flag: "🇲🇨", km: 3.34, scene: "circuit", sea: true, quip: "Un peu moins vite qu'une F1." },
+  { id: "monaco", laps: "du circuit de Monaco", name: "le circuit de Monaco", short: "Circuit de Monaco", where: "Monte-Carlo", flag: "🇲🇨", km: 3.337, scene: "circuit", sea: true, quip: "Un peu moins vite qu'une F1." },
   { id: "centralpark", name: "Central Park", short: "Central Park", where: "New York", flag: "🇺🇸", km: 4.0, scene: "park" },
   { id: "copacabana", name: "la plage de Copacabana", short: "Copacabana", where: "Rio de Janeiro", flag: "🇧🇷", km: 4.0, scene: "coast", sand: "#f3e3b8", quip: "Version tapis, sans le sable." },
-  { id: "silverstone", name: "le circuit de Silverstone", short: "Silverstone", where: "Angleterre", flag: "🇬🇧", km: 5.89, scene: "circuit", alt: 1 },
+  { id: "silverstone", laps: "du circuit de Silverstone", name: "le circuit de Silverstone", short: "Silverstone", where: "Angleterre", flag: "🇬🇧", km: 5.891, scene: "circuit", alt: 1, quip: "Thé de 17 h non compris." },
   { id: "vegas", name: "le Strip de Las Vegas", short: "Las Vegas Strip", where: "Nevada", flag: "🇺🇸", km: 6.8, scene: "avenue", noArc: true, palette: ["#f2b8d0", "#b8d8f2", "#f7e08a", "#c9b8f2"], quip: "Ce qui se passe sur le tapis reste sur le tapis." },
   { id: "promenade", name: "la promenade des Anglais", short: "Promenade des Anglais", where: "Nice", flag: "🇫🇷", km: 7, scene: "coast" },
-  { id: "spa", name: "le circuit de Spa-Francorchamps", short: "Spa-Francorchamps", where: "Belgique", flag: "🇧🇪", km: 7.0, scene: "circuit", alt: 2 },
+  { id: "spa", laps: "du circuit de Spa-Francorchamps", name: "le circuit de Spa-Francorchamps", short: "Spa-Francorchamps", where: "Belgique", flag: "🇧🇪", km: 7.004, quip: "Raidillon de l'Eau Rouge à fond.", scene: "circuit", alt: 2 },
   { id: "vascodegama", name: "le pont Vasco de Gama", short: "Pont Vasco de Gama", where: "Lisbonne", flag: "🇵🇹", km: 12.3, scene: "bridge", color: "#e9e4dc" },
   { id: "seine", name: "la Seine dans Paris", short: "La Seine à Paris", where: "Paris", flag: "🇫🇷", km: 13, scene: "paris", river: true, quip: "Sans bateau-mouche." },
-  { id: "lemans", name: "le circuit des 24 Heures du Mans", short: "Circuit du Mans", where: "Le Mans", flag: "🇫🇷", km: 13.63, scene: "circuit" },
+  { id: "lemans", laps: "du circuit des 24 Heures du Mans", name: "le circuit des 24 Heures du Mans", short: "Circuit du Mans", where: "Le Mans", flag: "🇫🇷", km: 13.626, scene: "circuit", quip: "Il reste 23 heures et quelques." },
   { id: "gibraltar", name: "le détroit de Gibraltar", short: "Détroit de Gibraltar", where: "Espagne → Maroc", flag: "🌊", km: 14, scene: "sea", quip: "L'Europe → l'Afrique, à pied." },
   { id: "mbsummit", name: "le Mont-Blanc… à la verticale", short: "Mont-Blanc (altitude)", where: "Alpes", flag: "🏔️", km: 4.81, scene: "peak", quip: "Sans crampons ni piolet." },
   { id: "everest", name: "l'Everest… à la verticale", short: "Everest (altitude)", where: "Himalaya", flag: "🇳🇵", km: 8.85, scene: "peak", high: true, quip: "Oxygène en option." },
-  { id: "nordschleife", name: "la Nordschleife du Nürburgring", short: "Nordschleife", where: "Allemagne", flag: "🇩🇪", km: 20.8, scene: "circuit", alt: 3, quip: "« L'enfer vert », version tapis." },
+  { id: "nordschleife", laps: "de la Nordschleife", name: "la Nordschleife du Nürburgring", short: "Nordschleife", where: "Allemagne", flag: "🇩🇪", km: 20.832, scene: "circuit", alt: 3, quip: "« L'enfer vert », version tapis." },
   { id: "manhattan", name: "l'île de Manhattan", short: "Manhattan", where: "New York", flag: "🇺🇸", km: 21.6, scene: "city" },
   { id: "manche", name: "la traversée de la Manche", short: "Traversée de la Manche", where: "Calais → Douvres", flag: "🌊", km: 33, scene: "sea" },
   { id: "periph", name: "le périphérique parisien", short: "Périphérique", where: "Paris", flag: "🇫🇷", km: 35, scene: "circuit", city: true, quip: "Et sans bouchon !" },
@@ -44,6 +44,24 @@ export const PLACES = [
   { id: "earth", name: "le tour de la Terre", short: "Tour de la Terre", where: "Équateur", flag: "🌍", km: 40075, scene: "globe" },
   { id: "moon", name: "la distance Terre → Lune", short: "Terre → Lune", where: "Espace", flag: "🌙", km: 384400, scene: "space", quip: "Houston, on a un marcheur." },
 
+  // --- Tours de circuits auto ---
+  { id: "magnycours", laps: "du circuit de Magny-Cours", short: "Magny-Cours", where: "Nièvre", flag: "🇫🇷", km: 4.411, scene: "circuit", alt: 4, quip: "Vroum, version chaussettes." },
+  { id: "interlagos", laps: "d'Interlagos", short: "Interlagos", where: "São Paulo", flag: "🇧🇷", km: 4.309, scene: "circuit", alt: 5, quip: "Senna serait (un peu) fier." },
+  { id: "indy", laps: "de l'ovale d'Indianapolis", short: "Indianapolis", where: "Indiana", flag: "🇺🇸", km: 4.023, scene: "stadium", oval: true, quip: "Toujours à gauche." },
+  { id: "monza", laps: "du circuit de Monza", short: "Monza", where: "Italie", flag: "🇮🇹", km: 5.793, scene: "circuit", alt: 2, quip: "Le temple de la vitesse… presque." },
+  { id: "suzuka", laps: "du circuit de Suzuka", short: "Suzuka", where: "Japon", flag: "🇯🇵", km: 5.807, scene: "circuit", alt: 6, quip: "Le seul circuit en 8 : tu t'es croisé toi-même." },
+  { id: "ricard", laps: "du circuit Paul-Ricard", short: "Paul-Ricard", where: "Le Castellet", flag: "🇫🇷", km: 5.842, scene: "circuit", alt: 4 },
+  { id: "karting", laps: "de piste de karting", short: "Piste de karting", where: "Karting du coin", flag: "🏎️", km: 1.0, scene: "circuit", alt: 5, quip: "Sans se faire doubler par un enfant de 10 ans." },
+
+  // --- Tours de terrain / aller-retours ---
+  { id: "poolar", laps: "en piscine olympique", one: "aller-retour", many: "aller-retours", short: "Aller-retours piscine", where: "Bassin de 50 m", flag: "🏊", km: 0.1, scene: "pool", quip: "Bonnet de bain non obligatoire." },
+  { id: "foottour", laps: "de terrain de foot", short: "Tours de terrain de foot", where: "105 × 68 m", flag: "⚽", km: 0.346, scene: "field", field: "foot", quip: "Échauffement validé, coach." },
+  { id: "rugbytour", laps: "de terrain de rugby", short: "Tours de terrain de rugby", where: "en-buts compris", flag: "🏉", km: 0.428, scene: "field", field: "rugby", quip: "Sans plaquage." },
+  { id: "baskettour", laps: "de terrain de basket", short: "Tours de terrain de basket", where: "28 × 15 m", flag: "🏀", km: 0.086, scene: "field", field: "basket", quip: "Le banc de touche te regarde." },
+  { id: "tennistour", laps: "de court de tennis", short: "Tours de court de tennis", where: "23,77 × 10,97 m", flag: "🎾", km: 0.0695, scene: "field", field: "tennis", quip: "Ramasseur de balles de compétition." },
+  { id: "hockeytour", laps: "de patinoire", short: "Tours de patinoire", where: "60 × 30 m", flag: "🏒", km: 0.17, scene: "field", field: "ice", quip: "Sans glisser une seule fois." },
+  { id: "velodrome", laps: "de vélodrome", short: "Tours de vélodrome", where: "Piste de 250 m", flag: "🚴", km: 0.25, scene: "stadium", velodrome: true, quip: "Sans vélo, c'est plus dur." },
+
   // --- Objets mis bout à bout (le chiffre est le nombre d'objets) ---
   { id: "spaghetti", count: true, plural: "spaghettis mis bout à bout", short: "Spaghettis", flag: "🍝", km: 0.00025, glyph: "spaghetti", bg: "#b8432e", quip: "Al dente, évidemment." },
   { id: "smartphone", count: true, plural: "smartphones posés bout à bout", short: "Smartphones", flag: "📱", km: 0.000147, glyph: "phone", bg: "#e9ecf3", quip: "Et pas un seul regardé." },
@@ -55,7 +73,6 @@ export const PLACES = [
   { id: "tennis", count: true, plural: "courts de tennis", short: "Courts de tennis", flag: "🎾", km: 0.02377, glyph: "tennis", bg: "#6aa35a", quip: "Jeu, set et match." },
   { id: "whale", count: true, plural: "baleines bleues à la queue leu leu", short: "Baleines bleues", flag: "🐋", km: 0.025, glyph: "whale", bg: "#1e6a9a", quip: "Sans se mouiller." },
   { id: "basket", count: true, plural: "terrains de basket", short: "Terrains de basket", flag: "🏀", km: 0.028, glyph: "basket", bg: "#3b3f5e", quip: "Swish." },
-  { id: "pool", count: true, plural: "longueurs de piscine olympique", short: "Piscine olympique", flag: "🏊", km: 0.05, glyph: "pool", bg: "#d9e7ef", quip: "Mais au sec." },
   { id: "a380", count: true, plural: "Airbus A380 nez à queue", short: "Airbus A380", flag: "✈️", km: 0.0727, glyph: "plane", bg: "#7a8796", quip: "Embarquement immédiat." },
   { id: "statue", count: true, plural: "statues de la Liberté empilées", short: "Statue de la Liberté", flag: "🗽", km: 0.093, glyph: "statue", bg: "#bfe0d8", quip: "Flambeau compris." },
   { id: "sprint", count: true, plural: "sprints de 100 m façon Usain Bolt", short: "100 m d'Usain Bolt", flag: "⚡", km: 0.1, scene: "stadium", straight: true, quip: "Lui en 9''58. Toi, à ton rythme." },
@@ -63,22 +80,25 @@ export const PLACES = [
   { id: "tgv", count: true, plural: "rames de TGV", short: "Rames de TGV", flag: "🚄", km: 0.2, glyph: "tgv", bg: "#c9c3b8", quip: "Sans retard, toi." },
   { id: "titanic", count: true, plural: "Titanic bout à bout", short: "Titanic", flag: "🚢", km: 0.269, glyph: "ship", bg: "#25628e", quip: "Aucun iceberg en vue." },
   { id: "eiffel", count: true, plural: "tours Eiffel couchées", short: "Tour Eiffel couchée", flag: "🗼", km: 0.33, glyph: "eiffel", bg: "#cfd9e6", quip: "Elle mérite bien une sieste." },
-  { id: "track", count: true, plural: "tours de piste d'athlétisme", short: "Tours de piste", flag: "🏟️", km: 0.4, scene: "stadium", quip: "Le coach serait fier." },
+  { id: "track", laps: "de piste d'athlétisme", short: "Tours de piste", flag: "🏟️", km: 0.4, scene: "stadium", quip: "Le coach serait fier." },
   { id: "burj", count: true, plural: "Burj Khalifa couchées", short: "Burj Khalifa couchée", flag: "🏙️", km: 0.828, glyph: "burj", bg: "#e2c9a0", quip: "828 m de gratte-ciel à l'horizontale." },
 ];
 
 const isCount = (p) => !!p.count;
+const isLaps = (p) => !!p.laps;
 
 // Toutes les comparaisons « parlantes » pour une distance : lieux entre 0,25× et 8×, objets de 2 à 99 999.
 export function placesFor(km) {
   if (!(km > 0)) return [];
   const all = PLACES.map((p) => ({ place: p, ratio: km / p.km }));
-  const places = all.filter((x) => !isCount(x.place) && x.ratio >= 0.25 && x.ratio <= 8)
+  const places = all.filter((x) => !isCount(x.place) && !isLaps(x.place) && x.ratio >= 0.25 && x.ratio <= 8)
     .sort((a, b) => Math.abs(Math.log(a.ratio * 0.9)) - Math.abs(Math.log(b.ratio * 0.9)));
+  const laps = all.filter((x) => isLaps(x.place) && x.ratio >= 0.8 && x.ratio < 2000)
+    .sort((a, b) => Math.abs(Math.log(a.ratio / 6)) - Math.abs(Math.log(b.ratio / 6)));
   const counts = all.filter((x) => isCount(x.place) && x.ratio >= 2 && x.ratio < 100000)
     .sort((a, b) => Math.abs(Math.log(a.ratio / 60)) - Math.abs(Math.log(b.ratio / 60)));
   const out = [];
-  for (let i = 0; i < Math.max(places.length, counts.length); i++) { if (places[i]) out.push(places[i]); if (counts[i]) out.push(counts[i]); }
+  for (let i = 0; i < Math.max(places.length, laps.length, counts.length); i++) for (const g of [places, laps, counts]) if (g[i]) out.push(g[i]);
   if (!out.length) out.push(...all.filter((x) => !isCount(x.place)).sort((a, b) => Math.abs(Math.log(a.ratio)) - Math.abs(Math.log(b.ratio))).slice(0, 1));
   return out;
 }
@@ -94,15 +114,20 @@ export function pickFor(km, seed = "") {
 
 // Prochain défi pour un cumul : le premier lieu pas encore « bouclé ».
 export function nextChallenge(totalKm) {
-  const ps = PLACES.filter((x) => !isCount(x) && x.scene !== "peak").sort((a, b) => a.km - b.km);
+  const ps = PLACES.filter((x) => !isCount(x) && !isLaps(x) && x.scene !== "peak").sort((a, b) => a.km - b.km);
   const p = ps.find((x) => x.km > totalKm) || ps[ps.length - 1];
   return { place: p, ratio: totalKm / p.km };
 }
-export const challengePlaces = () => PLACES.filter((x) => !isCount(x) && x.scene !== "peak").sort((a, b) => a.km - b.km);
+export const challengePlaces = () => PLACES.filter((x) => !isCount(x) && !isLaps(x) && x.scene !== "peak").sort((a, b) => a.km - b.km);
 
 export const ofName = (n) => n.replace(/^le /, "du ").replace(/^les /, "des ").replace(/^la /, "de la ").replace(/^l'/, "de l'").replace(/^(?!du |des |de )/, "de ");
 
 export function ratioText(ratio, place) {
+  if (isLaps(place)) {
+    const n = ratio >= 10 ? Math.round(ratio) : Math.round(ratio * 10) / 10;
+    const unit = n < 2 ? place.one || "tour" : place.many || "tours";
+    return { big: n.toLocaleString("fr-FR"), line: `${unit} ${place.laps}` };
+  }
   if (isCount(place)) {
     const n = ratio >= 10 ? Math.round(ratio) : Math.round(ratio * 10) / 10;
     return { big: n.toLocaleString("fr-FR"), line: place.plural };
@@ -171,6 +196,9 @@ const SCENES = {
     d: p.city ? "M500 130 C 720 130 880 260 880 480 S 760 860 500 870 S 120 760 120 500 S 280 130 500 130Z"
       : p.alt === 1 ? "M200 800 C 120 700 160 560 260 520 L 420 440 C 470 410 460 330 400 300 L 300 250 C 240 210 300 120 380 140 L 760 230 C 850 250 880 340 830 420 L 700 640 C 660 710 720 760 790 760 C 860 760 880 840 800 870 L 300 880 C 250 880 220 830 200 800Z"
       : p.alt === 2 ? "M150 860 L 260 620 C 290 560 360 560 380 500 L 330 300 C 310 200 400 150 470 210 L 840 520 C 900 570 880 660 800 650 L 600 610 C 540 600 500 650 520 710 L 560 820 C 580 880 520 910 470 890 Z"
+      : p.alt === 4 ? "M140 300 C 140 180 260 160 330 220 L 520 420 C 560 460 620 450 640 400 L 700 220 C 730 140 860 150 870 250 L 860 700 C 855 820 760 860 680 820 L 420 700 C 360 670 300 700 280 760 C 250 860 140 850 140 760 Z"
+      : p.alt === 5 ? "M200 200 L 800 200 C 880 200 880 330 800 330 L 400 330 C 330 330 330 440 400 440 L 800 440 C 880 440 880 800 800 800 L 600 800 C 520 800 520 660 440 660 C 360 660 360 800 280 800 L 200 800 C 120 800 120 200 200 200Z"
+      : p.alt === 6 ? "M500 500 C 420 380 260 180 180 300 C 100 420 300 560 500 500 C 700 440 900 580 820 700 C 740 820 580 620 500 500Z"
       : p.alt === 3 ? "M120 500 C 100 300 240 160 380 200 C 460 220 420 330 500 340 C 600 350 580 170 700 160 C 840 150 900 300 860 420 C 830 510 700 470 690 560 C 680 660 880 680 860 800 C 840 900 640 890 560 820 C 480 750 420 860 300 850 C 170 840 140 660 120 500Z"
       : p.sea ? "M180 600 C 120 470 220 360 340 380 S 520 240 600 260 S 820 200 860 330 S 760 520 820 600 S 600 660 480 620 S 300 680 180 600Z"
       : "M150 820 L 210 250 C 220 160 320 140 360 220 L 470 470 C 500 530 560 520 590 470 L 760 180 C 800 120 880 140 870 230 L 840 760 C 830 860 760 880 690 850 L 230 870 C 180 872 150 860 150 820Z",
@@ -269,13 +297,47 @@ const SCENES = {
     d: "M300 680 C 420 420 560 300 760 240",
   }),
   stadium: (p) => ({
-    bg: `<rect width="1000" height="1000" fill="#3f7d3a"/>
-      <rect x="120" y="270" width="760" height="460" rx="230" fill="#c8553d"/>
-      ${[1, 2, 3, 4, 5].map((k) => `<rect x="${120 + k * 14}" y="${270 + k * 14}" width="${760 - k * 28}" height="${460 - k * 28}" rx="${230 - k * 14}" fill="none" stroke="#f3e2dc" stroke-width="2"/>`).join("")}
-      <rect x="214" y="364" width="572" height="272" rx="136" fill="#4f9a45"/>`,
+    bg: `<rect width="1000" height="1000" fill="${p.oval ? "#bfb7a6" : p.velodrome ? "#2b2f4a" : "#3f7d3a"}"/>
+      ${p.oval ? `<rect x="40" y="200" width="920" height="600" rx="300" fill="#e3ddd0"/>` : ""}
+      <rect x="120" y="270" width="760" height="460" rx="230" fill="${p.oval ? "#5a5a5a" : p.velodrome ? "#c99b62" : "#c8553d"}"/>
+      ${p.oval ? "" : [1, 2, 3, 4, 5].map((k) => `<rect x="${120 + k * 14}" y="${270 + k * 14}" width="${760 - k * 28}" height="${460 - k * 28}" rx="${230 - k * 14}" fill="none" stroke="${p.velodrome ? "#e6c590" : "#f3e2dc"}" stroke-width="2"/>`).join("")}
+      ${p.velodrome ? `<rect x="190" y="340" width="620" height="320" rx="160" fill="none" stroke="#2d6fd6" stroke-width="8"/><rect x="200" y="350" width="600" height="300" rx="150" fill="none" stroke="#e23a3a" stroke-width="5"/>` : ""}
+      <rect x="214" y="364" width="572" height="272" rx="136" fill="${p.oval ? "#5f9a4c" : p.velodrome ? "#3c4166" : "#4f9a45"}"/>
+      ${p.oval ? `<path d="M360 700 L 640 700" stroke="#fff" stroke-width="10" stroke-dasharray="14 14"/>` : ""}`,
     d: p.straight ? "M300 714 L 700 714" : "M500 714 L 350 714 A 214 214 0 0 1 350 286 L 650 286 A 214 214 0 0 1 650 714 Z",
     track: false,
   }),
+  pool: () => ({
+    bg: `<rect width="1000" height="1000" fill="#e8eef2"/>${[...Array(12)].map((_, i) => `<rect x="${(i % 4) * 250}" y="${Math.floor(i / 4) * 340 - 20}" width="246" height="20" fill="#d6dee5"/>`).join("")}
+      <rect x="90" y="180" width="820" height="640" rx="14" fill="#2f97d1"/>
+      ${[1, 2, 3, 4, 5, 6, 7].map((i) => `<path d="M110 ${180 + i * 80} H 890" stroke="${i % 2 ? "#f4d03f" : "#e74c3c"}" stroke-width="6" stroke-dasharray="16 10"/>`).join("")}
+      ${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<path d="M130 ${220 + i * 80} H 870" stroke="#1d6fa3" stroke-width="5" opacity=".5"/>`).join("")}
+      <rect x="70" y="170" width="22" height="660" fill="#fff"/><rect x="908" y="170" width="22" height="660" fill="#fff"/>`,
+    d: "M130 500 H 870 C 900 500 900 540 870 540 H 130",
+  }),
+  field: (p) => {
+    const F = {
+      foot: ["#3f8a3a", "#4c9a46", 900, 584, true],
+      rugby: ["#3f8a3a", "#4c9a46", 920, 450, false],
+      basket: ["#d89a5a", "#d89a5a", 860, 460, false],
+      tennis: ["#3d7fbd", "#3d7fbd", 860, 400, false],
+      ice: ["#eef5fa", "#eef5fa", 860, 430, false],
+    }[p.field];
+    const [c1, c2, W, H] = F, x = (1000 - W) / 2, y = (1000 - H) / 2;
+    let lines = "";
+    if (p.field === "foot") lines = `<path d="M500 ${y} V ${y + H}" stroke="#fff" stroke-width="6"/><circle cx="500" cy="500" r="80" fill="none" stroke="#fff" stroke-width="6"/><rect x="${x}" y="${500 - 170}" width="140" height="340" fill="none" stroke="#fff" stroke-width="6"/><rect x="${x + W - 140}" y="${500 - 170}" width="140" height="340" fill="none" stroke="#fff" stroke-width="6"/>`;
+    if (p.field === "rugby") lines = `${[0.08, 0.3, 0.5, 0.7, 0.92].map((f) => `<path d="M${x + W * f} ${y} V ${y + H}" stroke="#fff" stroke-width="5"/>`).join("")}<path d="M${x + W * 0.04} 470 V 530 M${x + W * 0.96} 470 V 530" stroke="#fff" stroke-width="10"/>`;
+    if (p.field === "basket") lines = `<path d="M500 ${y} V ${y + H}" stroke="#fff" stroke-width="6"/><circle cx="500" cy="500" r="60" fill="none" stroke="#fff" stroke-width="6"/><path d="M${x} 330 C ${x + 260} 330 ${x + 260} 670 ${x} 670 M${x + W} 330 C ${x + W - 260} 330 ${x + W - 260} 670 ${x + W} 670" stroke="#fff" stroke-width="6" fill="none"/><rect x="${x}" y="440" width="150" height="120" fill="#b5683a"/><rect x="${x + W - 150}" y="440" width="150" height="120" fill="#b5683a"/>`;
+    if (p.field === "tennis") lines = `<rect x="${x + 30}" y="${y + 30}" width="${W - 60}" height="${H - 60}" fill="none" stroke="#fff" stroke-width="6"/><path d="M500 ${y + 10} V ${y + H - 10}" stroke="#ddd" stroke-width="10"/><path d="M${x + 210} ${y + 75} V ${y + H - 75} M${x + W - 210} ${y + 75} V ${y + H - 75} M${x + 210} 500 H ${x + W - 210} M${x + 30} ${y + 75} H ${x + W - 30} M${x + 30} ${y + H - 75} H ${x + W - 30}" stroke="#fff" stroke-width="5"/>`;
+    if (p.field === "ice") lines = `<path d="M500 ${y} V ${y + H}" stroke="#d33" stroke-width="8"/><path d="M${x + 280} ${y} V ${y + H} M${x + W - 280} ${y} V ${y + H}" stroke="#2a64c8" stroke-width="8"/><circle cx="500" cy="500" r="60" fill="none" stroke="#2a64c8" stroke-width="5"/>${[[x + 140, 380], [x + 140, 620], [x + W - 140, 380], [x + W - 140, 620]].map(([a, b]) => `<circle cx="${a}" cy="${b}" r="44" fill="none" stroke="#d33" stroke-width="5"/>`).join("")}`;
+    const stripes = F[4] ? [...Array(10)].map((_, i) => i % 2 ? `<rect x="${x + (W / 10) * i}" y="${y}" width="${W / 10}" height="${H}" fill="${c2}"/>` : "").join("") : "";
+    const outer = p.field === "ice" ? "#8a97a6" : p.field === "basket" ? "#7a4b2a" : p.field === "tennis" ? "#6aa35a" : "#2f6e2b";
+    const m = 40;
+    return {
+      bg: `<rect width="1000" height="1000" fill="${outer}"/><rect x="${x}" y="${y}" width="${W}" height="${H}" rx="${p.field === "ice" ? 120 : 4}" fill="${c1}" stroke="#fff" stroke-width="${p.field === "ice" ? 10 : 6}"/>${stripes}${lines}`,
+      d: `M${x - m + 60} ${y - m} H ${x + W + m - 60} Q ${x + W + m} ${y - m} ${x + W + m} ${y - m + 60} V ${y + H + m - 60} Q ${x + W + m} ${y + H + m} ${x + W + m - 60} ${y + H + m} H ${x - m + 60} Q ${x - m} ${y + H + m} ${x - m} ${y + H + m - 60} V ${y - m + 60} Q ${x - m} ${y - m} ${x - m + 60} ${y - m} Z`,
+    };
+  },
   tiles: (p) => {
     const g = GLYPHS[p.glyph];
     const rows = [80, 250, 420, 590, 760, 930];

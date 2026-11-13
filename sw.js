@@ -1,5 +1,5 @@
 // Service worker : app instantanée et utilisable hors ligne ; toujours la dernière version quand on est en ligne.
-const VERSION = "ibifit-v6";
+const VERSION = "ibifit-v7";
 const SHELL = ["./", "index.html", "styles.css", "manifest.webmanifest", "js/app.js", "js/core.js", "js/store.js", "js/ocr.js", "js/places.js", "js/story.js",
   "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 

@@ -1,5 +1,6 @@
 // Image de story Instagram (1080 × 1920) : vue aérienne du lieu + trajet, comparaison, stats.
 import { placeSVG, ratioText, lenLabel } from "./places.js";
+import { SAT, satCanvas } from "./sat.js";
 
 const W = 1080, H = 1920;
 const FONT = `-apple-system, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif`;
@@ -59,9 +60,17 @@ export async function renderStory(o) {
   ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = 60; ctx.shadowOffsetY = 24;
   rr(ctx, X, Y, S, SH, RAD); ctx.fillStyle = "#1e2342"; ctx.fill();
   ctx.restore();
-  const img = await svgImage(placeSVG(o.place, o.ratio, { id: "st" }));
-  const sh = (1000 * SH) / S;
-  ctx.save(); rr(ctx, X, Y, S, SH, RAD); ctx.clip(); ctx.drawImage(img, 0, (1000 - sh) / 2, 1000, sh, X, Y, S, SH); ctx.restore();
+  // Vraie vue satellite si on connaît le tracé, sinon l'illustration
+  let sat = null;
+  if (SAT[o.place.id]) { try { sat = await satCanvas(o.place.id, o.ratio, S, SH); } catch { sat = null; } }
+  ctx.save(); rr(ctx, X, Y, S, SH, RAD); ctx.clip();
+  if (sat) ctx.drawImage(sat, X, Y);
+  else {
+    const img = await svgImage(placeSVG(o.place, o.ratio, { id: "st" }));
+    const sh = (1000 * SH) / S;
+    ctx.drawImage(img, 0, (1000 - sh) / 2, 1000, sh, X, Y, S, SH);
+  }
+  ctx.restore();
   ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 3; rr(ctx, X, Y, S, SH, RAD); ctx.stroke();
 
   // Pastille : lieu, ville, longueur

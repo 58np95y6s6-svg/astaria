@@ -1,6 +1,7 @@
 import { spanSec, ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
 import { PLACES, placesFor, pickFor, placeSVG, ratioText, nextChallenge, challengePlaces } from "./places.js";
 import { renderStory, shareBlob } from "./story.js";
+import { SAT, satCanvas } from "./sat.js";
 import { foodFor, foodText, periodRange, periodLabel, summarize, streaks, motivation } from "./recap.js";
 import { loadWorkouts, loadSettings, saveSettings, upsertWorkout, deleteWorkout, exportAll, importAll } from "./store.js";
 import { ocrImage } from "./ocr.js";
@@ -166,7 +167,7 @@ function compareStrip(w, c) {
   const { place, ratio } = compareFor(w, c);
   const rt = ratioText(ratio, place);
   return `<div class="cmp">
-    <div class="cmp-img">${placeSVG(place, ratio, { id: `t${w.id}` })}</div>
+    <div class="cmp-img"${SAT[place.id] ? ` data-sat="${place.id}" data-ratio="${ratio}"` : ""}>${placeSVG(place, ratio, { id: `t${w.id}` })}</div>
     <div class="grow"><div class="small muted">L'équivalent de</div><b class="cmp-big">${esc(rt.big)}</b> <span class="cmp-line">${esc(rt.line)}</span>${place.quip ? `<div class="cmp-quip">${esc(place.quip)}</div>` : ""}</div>
     <button class="story-btn" data-story="${w.id}" aria-label="Partager en story">${IG}</button>
   </div>`;
@@ -383,7 +384,7 @@ function viewStats() {
   const done = challengePlaces().filter((p) => p.km <= allKm);
   $app.innerHTML = `
     ${all.length ? `<div class="challenge">
-      <div class="ch-img">${placeSVG(ch.place, ch.ratio, { id: "ch" })}<span class="ch-where">📍 ${esc(ch.place.where)} ${ch.place.flag}</span></div>
+      <div class="ch-img"${SAT[ch.place.id] ? ` data-sat="${ch.place.id}" data-ratio="${ch.ratio}"` : ""}>${placeSVG(ch.place, ch.ratio, { id: "ch" })}<span class="ch-where">📍 ${esc(ch.place.where)} ${ch.place.flag}</span></div>
       <div class="ch-body">
         <div class="small" style="opacity:.7">Défi en cours · depuis le début</div>
         <div class="ch-big">${esc(chRt.big)}</div>
@@ -528,7 +529,7 @@ function viewRecap() {
     ${foods.length ? `<div class="card food-card"><h2>🔥 ${int(cur.kcal)} kcal brûlées, c'est l'équivalent de</h2>
       <div class="foods">${foods.map((x) => `<div class="food"><span class="fe">${x.f.e}</span><b class="num">${qtyHTML(x.n)}</b><span>${esc(x.n >= 1.75 ? x.f.many : x.f.one)}</span></div>`).join("")}</div>
       <div class="small muted" style="margin-top:8px">Valeurs moyennes, pour le fun. Ça ne veut pas dire qu'il faut les manger 😇</div></div>` : ""}
-    ${cmp ? `<div class="cmp" style="margin:12px 0"><div class="cmp-img">${placeSVG(cmp.place, cmp.ratio, { id: "rc" })}</div>
+    ${cmp ? `<div class="cmp" style="margin:12px 0"><div class="cmp-img"${SAT[cmp.place.id] ? ` data-sat="${cmp.place.id}" data-ratio="${cmp.ratio}"` : ""}>${placeSVG(cmp.place, cmp.ratio, { id: "rc" })}</div>
       <div class="grow"><div class="small muted">Distance en vrai</div><b class="cmp-big">${esc(cmpRt.big)}</b> <span class="cmp-line">${esc(cmpRt.line)}</span></div>
       <button class="story-btn" id="recapStory" aria-label="Partager en story">${IG}</button></div>` : ""}
     <div class="card"><h2>Séries</h2>
@@ -605,6 +606,26 @@ function viewSettings() {
     try { const n = await importAll(e.target.files[0]); settings = loadSettings(); toast(`${n} séance(s) importée(s)`); } catch (er) { toast(er.message); }
   });
 }
+
+// Vignettes satellite : remplacent l'illustration une fois chargées (sinon l'illustration reste).
+const satCache = new Map();
+new MutationObserver(() => {
+  $app.querySelectorAll("[data-sat]:not([data-sat-done])").forEach(async (el) => {
+    el.dataset.satDone = "1";
+    const key = `${el.dataset.sat}|${(+el.dataset.ratio).toFixed(3)}|${el.classList.contains("ch-img")}`;
+    try {
+      let url = satCache.get(key);
+      if (!url) {
+        const wide = el.classList.contains("ch-img");
+        const cv = await satCanvas(el.dataset.sat, +el.dataset.ratio, wide ? 800 : 300, wide ? 500 : 300);
+        url = cv.toDataURL("image/jpeg", 0.85); satCache.set(key, url);
+      }
+      const keep = el.querySelector(".ch-where");
+      el.innerHTML = `<img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`;
+      if (keep) el.appendChild(keep);
+    } catch { /* hors ligne : on garde l'illustration */ }
+  });
+}).observe($app, { childList: true, subtree: true });
 
 router();
 

@@ -200,12 +200,16 @@ function openWorkoutStory(w) {
 
 // Fenêtre « story » : aperçu, autre lieu, partager.
 function openStory(cands, build, onPick) {
-  let i = 0, blob = null, url = null, busy = false;
+  // À chaque ouverture : une comparaison tirée au hasard (différente de celle affichée), modifiable ensuite.
+  const pool = Math.min(cands.length, 30);
+  let i = pool > 1 ? 1 + Math.floor(Math.random() * (pool - 1)) : 0, blob = null, url = null, busy = false;
+  if (i) onPick?.(cands[i]);
   const el = document.createElement("div");
   el.className = "modal";
   el.innerHTML = `<div class="modal-sheet">
       <div class="row between"><b style="font-size:17px">Story Instagram</b><button class="icon-close" data-x aria-label="Fermer">✕</button></div>
       <div class="story-frame"><div class="loader">Création de l'image…</div></div>
+      <div class="row between" style="margin-bottom:4px"><span class="small muted">Comparaison</span><button class="link" data-rand>🎲 Une autre</button></div>
       <div class="place-chips"></div>
       <button class="btn primary block" data-share disabled>${IG} Partager en story</button>
       <div class="small muted" style="text-align:center;margin-top:8px">Dans la feuille de partage, choisis <b>Instagram</b> → <b>Story</b>.</div>
@@ -217,6 +221,8 @@ function openStory(cands, build, onPick) {
   const drawChips = () => {
     chips.innerHTML = cands.slice(0, 40).map((x, j) => `<button class="pchip${j === i ? " on" : ""}" data-pi="${j}">${x.place.flag} ${esc(x.place.short)}</button>`).join("");
     chips.querySelectorAll("[data-pi]").forEach((b) => b.addEventListener("click", () => { if (busy) return; i = +b.dataset.pi; onPick?.(cands[i]); draw(); }));
+    const on = chips.querySelector(".pchip.on");
+    if (on) chips.scrollLeft = on.offsetLeft - chips.clientWidth / 2 + on.offsetWidth / 2;
   };
   const draw = async () => {
     busy = true; drawChips();
@@ -230,6 +236,11 @@ function openStory(cands, build, onPick) {
     } catch (e) { el.querySelector(".story-frame").innerHTML = `<div class="empty down">${esc(e.message)}</div>`; }
     busy = false;
   };
+  el.querySelector("[data-rand]").addEventListener("click", () => {
+    if (busy || pool < 2) return;
+    let j; do { j = Math.floor(Math.random() * pool); } while (j === i);
+    i = j; onPick?.(cands[i]); draw();
+  });
   el.querySelector("[data-share]").addEventListener("click", async () => {
     if (!blob) return;
     const r = await shareBlob(blob, `ibifit-${cands[i].place.id}.png`);

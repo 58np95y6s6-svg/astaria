@@ -147,3 +147,22 @@ test("vues satellite : tracés réels pour les lieux", () => {
     assert.ok(v.path.length >= 2 && v.path.every(([a, b]) => Math.abs(a) <= 85 && Math.abs(b) <= 180), k);
   }
 });
+
+import { parseHealthWorkout, healthDate } from "../js/core.js";
+test("export Santé : séance de marche sur tapis", () => {
+  const xml = `<Workout workoutActivityType="HKWorkoutActivityTypeWalking" duration="48.1666" durationUnit="min" sourceName="Apple Watch" creationDate="2026-11-13 07:31:00 +0100" startDate="2026-11-13 06:42:00 +0100" endDate="2026-11-13 07:30:10 +0100">
+  <MetadataEntry key="HKIndoorWorkout" value="1"/>
+  <WorkoutStatistics type="HKQuantityTypeIdentifierActiveEnergyBurned" startDate="x" endDate="y" sum="255.4" unit="kcal"/>
+  <WorkoutStatistics type="HKQuantityTypeIdentifierDistanceWalkingRunning" startDate="x" endDate="y" sum="2.9013" unit="km"/>
+  <WorkoutStatistics type="HKQuantityTypeIdentifierBasalEnergyBurned" startDate="x" endDate="y" sum="60.2" unit="kcal"/>
+  <WorkoutStatistics type="HKQuantityTypeIdentifierHeartRate" startDate="x" endDate="y" average="104.3" minimum="80" maximum="120" unit="count/min"/>
+ </Workout>`;
+  const w = parseHealthWorkout(xml);
+  assert.equal(w.type, "walk_treadmill");
+  assert.equal(w.date, healthDate("2026-11-13 06:42:00 +0100"));
+  assert.equal(w.date, "2026-11-13T05:42:00.000Z");
+  assert.deepEqual([w.durationSec, w.watchKm, w.kcalActive, w.kcalTotal, w.hrAvg], [2890, 2.9, 255, 316, 104]);
+  // ancien format (attributs totaux, miles)
+  const old = parseHealthWorkout(`<Workout workoutActivityType="HKWorkoutActivityTypeRunning" duration="30" durationUnit="min" totalDistance="3.1" totalDistanceUnit="mi" totalEnergyBurned="300" totalEnergyBurnedUnit="kcal" startDate="2020-05-01 18:00:00 +0200" endDate="2020-05-01 18:30:00 +0200"/>`);
+  assert.deepEqual([old.type, old.watchKm, old.kcalActive], ["run_out", 4.99, 300]);
+});

@@ -207,3 +207,42 @@ export function weekKey(d) {
   x.setDate(x.getDate() - day);
   return x.toISOString().slice(0, 10);
 }
+
+// ---------- Export de l'app Santé (export.xml / exportation.xml) ----------
+// « 2026-11-13 06:42:01 +0100 » → ISO
+export function healthDate(s) {
+  const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2})$/.exec(String(s || "").trim());
+  return m ? new Date(`${m[1]}T${m[2]}${m[3]}:${m[4]}`).toISOString() : null;
+}
+const attrs = (tag) => Object.fromEntries([...tag.matchAll(/([\w:]+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
+const toKm = (v, u) => (v == null ? null : u === "mi" ? v * 1.609344 : u === "m" ? v / 1000 : u === "yd" ? v * 0.0009144 : v);
+const toKcal = (v, u) => (v == null ? null : u === "kJ" ? v / 4.184 : v);
+
+/** Un bloc <Workout …>…</Workout> de l'export Santé → séance iBiFit (ou null). */
+export function parseHealthWorkout(block) {
+  const open = /<Workout\s[^>]*>/.exec(block);
+  if (!open) return null;
+  const a = attrs(open[0]);
+  const start = healthDate(a.startDate), end = healthDate(a.endDate);
+  if (!start) return null;
+  let durationSec = a.duration != null ? +a.duration * ({ min: 60, s: 1, h: 3600 }[a.durationUnit] || 60) : null;
+  if (!(durationSec > 0) && end) durationSec = (new Date(end) - new Date(start)) / 1000;
+  const indoor = /key="HKIndoorWorkout"\s+value="1"/.test(block);
+  const act = (a.workoutActivityType || "").replace("HKWorkoutActivityType", "");
+  const type = act === "Walking" ? (indoor ? "walk_treadmill" : "walk_out")
+    : act === "Running" ? (indoor ? "run_treadmill" : "run_out")
+    : act === "Cycling" ? "bike" : "other";
+  const stat = (id) => { const m = new RegExp(`<WorkoutStatistics[^>]*type="HKQuantityTypeIdentifier${id}"[^>]*>`).exec(block); return m ? attrs(m[0]) : null; };
+  const dist = stat("DistanceWalkingRunning") || stat("DistanceCycling");
+  const act_ = stat("ActiveEnergyBurned"), basal = stat("BasalEnergyBurned"), hr = stat("HeartRate");
+  let km = dist?.sum != null ? toKm(+dist.sum, dist.unit) : a.totalDistance != null ? toKm(+a.totalDistance, a.totalDistanceUnit) : null;
+  let kcal = act_?.sum != null ? toKcal(+act_.sum, act_.unit) : a.totalEnergyBurned != null ? toKcal(+a.totalEnergyBurned, a.totalEnergyBurnedUnit) : null;
+  const kcalB = basal?.sum != null ? toKcal(+basal.sum, basal.unit) : null;
+  const r = (x, d) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10 ** d) / 10 ** d);
+  return {
+    id: "h" + new Date(start).getTime().toString(36), source: "sante", activity: act,
+    type, date: start, durationSec: Math.round(durationSec || 0),
+    watchKm: r(km, 2), kcalActive: r(kcal, 0), kcalTotal: kcal != null && kcalB != null ? r(kcal + kcalB, 0) : null,
+    hrAvg: hr?.average != null ? r(+hr.average, 0) : null,
+  };
+}

@@ -3,7 +3,8 @@ import { PLACES, placesFor, pickFor, placeSVG, ratioText, nextChallenge, challen
 import { renderStory, shareBlob } from "./story.js";
 import { SAT, satCanvas } from "./sat.js";
 import { foodFor, foodText, periodRange, periodLabel, summarize, streaks, motivation } from "./recap.js";
-import { loadWorkouts, loadSettings, saveSettings, upsertWorkout, deleteWorkout, exportAll, importAll } from "./store.js";
+import { loadWorkouts, loadSettings, saveSettings, upsertWorkout, deleteWorkout, exportAll, importAll, mergeHealth } from "./store.js";
+import { readHealthExport } from "./health.js";
 import { ocrImage } from "./ocr.js";
 
 // ---------- utilitaires ----------
@@ -73,7 +74,7 @@ function draftToWorkout(d) {
   const segments = parseSegments(d.segText);
   const durationSec = (numIn(d.min) || 0) * 60 + (numIn(d.sec) || 0) || Math.round(segmentsMin(segments) * 60);
   return {
-    id: d.id, type: d.type, date: new Date(d.date || Date.now()).toISOString(), durationSec,
+    id: d.id, healthId: d.healthId, source: d.source, type: d.type, date: new Date(d.date || Date.now()).toISOString(), durationSec,
     watchKm: numIn(d.watchKm), realKm: numIn(d.realKm), segments: segments.length ? segments : undefined, placeId: d.placeId, kcalActive: numIn(d.kcalActive), kcalTotal: numIn(d.kcalTotal),
     hrAvg: numIn(d.hrAvg), note: String(d.note || "").slice(0, 200),
   };
@@ -276,6 +277,7 @@ function viewHome() {
       <div class="acc-body">
         <label class="btn primary block" style="margin:0;color:#fff;font-size:15px">📸 Importer une capture de la séance<input type="file" accept="image/*" id="shot" hidden></label>
         <div class="small muted" id="shotStatus" style="margin:8px 2px 4px">App Forme (ou Santé) → la séance → capture d'écran du détail.</div>
+        <a href="#/reglages" class="health-link">❤️ Tout récupérer d'un coup depuis l'app Santé →</a>
         ${formHTML(draft, "add")}
         <button class="btn primary block" id="addSave" style="margin-top:12px">Enregistrer la séance</button>
       </div>
@@ -325,7 +327,7 @@ function viewHome() {
     if (openId === id) { openId = null; editDraft = null; } else {
       const w = loadWorkouts().find((x) => x.id === id);
       openId = id;
-      editDraft = { id: w.id, type: w.type, date: localInput(w.date), end: endOf(w.date, w.durationSec), min: String(Math.floor(w.durationSec / 60)), sec: String(Math.round(w.durationSec % 60)),
+      editDraft = { id: w.id, healthId: w.healthId, source: w.source, type: w.type, date: localInput(w.date), end: endOf(w.date, w.durationSec), min: String(Math.floor(w.durationSec / 60)), sec: String(Math.round(w.durationSec % 60)),
         watchKm: w.watchKm ?? "", realKm: w.realKm ?? "", segText: segmentsText(w.segments), placeId: w.placeId, kcalActive: w.kcalActive ?? "", kcalTotal: w.kcalTotal ?? "", hrAvg: w.hrAvg ?? "", note: w.note || "" };
     }
     viewHome();
@@ -587,6 +589,18 @@ function viewSettings() {
         <p>Dans l'app Raccourcis : « Rechercher des échantillons de santé » (Énergie active, Distance marche et course, sur la période de la séance) → calculer la somme → « Ouvrir l'URL » avec ce lien. Les actions Santé disponibles varient selon la version d'iOS : je peux t'aider à monter le Raccourci pas à pas.</p>
         <button class="btn sm" id="copyLink">Copier le lien d'exemple</button>
       </div></details>
+    <div class="card health-card">
+      <h2>❤️ Récupérer mes séances de l'app Santé</h2>
+      <div class="small muted" style="margin-bottom:10px">Toutes tes séances Apple Watch d'un coup : heure de début et de fin, durée, distance, kcal, fréquence cardiaque, tapis ou extérieur. Ta correction de distance s'applique automatiquement, et tes ajouts (distance réelle, paliers) sont conservés.</div>
+      <ol class="steps">
+        <li>Ouvre l'app <b>Santé</b> → touche ta <b>photo de profil</b> en haut à droite.</li>
+        <li>Tout en bas : <b>Exporter toutes les données de santé</b> → <b>Exporter</b> (ça prend une minute).</li>
+        <li>Choisis <b>Enregistrer dans Fichiers</b>.</li>
+        <li>Reviens ici et choisis le fichier <b>exportation.zip</b> :</li>
+      </ol>
+      <label class="btn primary block" style="margin:10px 0 0;color:#fff;font-size:15px">📂 Choisir l'export Santé<input type="file" accept=".zip,.xml,application/zip,text/xml" id="healthFile" hidden></label>
+      <div class="small muted" id="healthStatus" style="margin-top:8px">${settings.lastHealthImport ? `Dernier import : ${new Date(settings.lastHealthImport).toLocaleDateString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}. Refais-le quand tu veux : seules les nouvelles séances sont ajoutées.` : "Le fichier reste sur ton téléphone : rien n'est envoyé sur internet."}</div>
+    </div>
     <div class="card">
       <h2>Sauvegarde</h2>
       <div class="small muted" style="margin-bottom:10px">Les séances sont enregistrées sur ce téléphone. Exporte-les pour les sauvegarder ou les transférer.</div>
@@ -600,6 +614,25 @@ function viewSettings() {
     toast(`Correction enregistrée : ×${(r / w).toFixed(2).replace(".", ",")}`);
     viewSettings();
   }));
+  document.getElementById("healthFile").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const st = document.getElementById("healthStatus");
+    try {
+      const found = await readHealthExport(file, (m) => { st.textContent = m; });
+      if (!found.length) { st.innerHTML = `<span class="down">Aucune séance trouvée dans ce fichier.</span>`; return; }
+      const by = {};
+      for (const w of found) by[w.type] = (by[w.type] || 0) + 1;
+      const detail = Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${ACTIVITIES[k].label.toLowerCase()}`).join(", ");
+      const sports = found.filter((w) => w.type !== "other");
+      const keepOther = by.other ? confirm(`${found.length} séances trouvées : ${detail}.\n\nImporter aussi les ${by.other} autres activités (yoga, renfo…) ?`) : false;
+      const r = mergeHealth(keepOther ? found : sports);
+      settings.lastHealthImport = new Date().toISOString(); saveSettings(settings);
+      st.innerHTML = `✓ ${r.added} séance${r.added > 1 ? "s" : ""} ajoutée${r.added > 1 ? "s" : ""}, ${r.updated} mise${r.updated > 1 ? "s" : ""} à jour, ${r.skipped} déjà à jour.`;
+      toast(`${r.added + r.updated} séance${r.added + r.updated > 1 ? "s" : ""} récupérée${r.added + r.updated > 1 ? "s" : ""} ❤️`);
+    } catch (er) { st.innerHTML = `<span class="down">Erreur : ${esc(er.message)}</span>`; }
+    e.target.value = "";
+  });
   document.getElementById("copyLink").addEventListener("click", () => { navigator.clipboard?.writeText(example).then(() => toast("Lien copié ✓"), () => toast("Copie impossible")); });
   document.getElementById("exp").addEventListener("click", exportAll);
   document.getElementById("imp").addEventListener("change", async (e) => {

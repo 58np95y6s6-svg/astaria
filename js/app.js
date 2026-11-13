@@ -1,4 +1,4 @@
-import { spanSec, ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
+import { parseSyncParam, spanSec, ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
 import { PLACES, placesFor, pickFor, placeSVG, ratioText, nextChallenge, challengePlaces } from "./places.js";
 import { renderStory, shareBlob } from "./story.js";
 import { SAT, satCanvas } from "./sat.js";
@@ -34,6 +34,16 @@ let settings = loadSettings();
 const routes = [
   [/^#?\/?$/, viewHome],
   [/^#\/import\?(.*)$/, (q) => { draft = { ...emptyDraft(), ...fromParsed(parseImportParams(q)) }; draft.end = endOf(draft.date, (numIn(draft.min) || 0) * 60 + (numIn(draft.sec) || 0)); addOpen = true; history.replaceState(null, "", "#/"); viewHome(); toast("Séance reçue : vérifie puis enregistre"); }],
+  [/^#\/sync\?(.*)$/, (q) => {
+    history.replaceState(null, "", "#/");
+    try {
+      const items = parseSyncParam(new URLSearchParams(q).get("w"));
+      const r = mergeHealth(items);
+      settings.lastSync = new Date().toISOString(); saveSettings(settings);
+      viewHome();
+      toast(r.added ? `${r.added} nouvelle${r.added > 1 ? "s" : ""} séance${r.added > 1 ? "s" : ""} synchronisée${r.added > 1 ? "s" : ""} ❤️` : items.length ? "Synchro faite : tout est à jour ✓" : "Synchro : aucune séance reçue");
+    } catch (e) { viewHome(); toast(e.message); }
+  }],
   [/^#\/stats$/, viewStats],
   [/^#\/resume$/, viewRecap],
   [/^#\/reglages$/, viewSettings],
@@ -590,6 +600,32 @@ function viewSettings() {
         <button class="btn sm" id="copyLink">Copier le lien d'exemple</button>
       </div></details>
     <div class="card health-card">
+      <h2>⏰ Synchro automatique chaque jour à 8 h</h2>
+      <div class="small muted" style="margin-bottom:8px">Un Raccourci iPhone lit tes séances dans Santé et les envoie à iBiFit. À créer une seule fois.</div>
+      <details class="mini"><summary><b>1. Créer le raccourci « iBiFit Sync »</b></summary>
+        <ol class="steps">
+          <li>App <b>Raccourcis</b> → <b>+</b> → nomme-le <b>iBiFit Sync</b>.</li>
+          <li>Ajoute <b>Rechercher des échantillons de santé</b> : type <b>Entraînements</b>, filtre <b>Date de début</b> « au cours des <b>7</b> derniers jours ».</li>
+          <li>Ajoute <b>Répéter avec chaque élément</b>. Dedans, ajoute <b>Texte</b> et écris, en insérant les variables de l'<i>Élément répété</i> :<br>
+            <code>Date de début~Date de fin~Type~Distance~Énergie active</code><br>
+            <span class="muted">(pour les deux dates : touche la variable → format <b>ISO 8601</b>, avec l'heure)</span></li>
+          <li>Après la répétition : <b>Combiner le texte</b> avec le séparateur personnalisé <code>;</code></li>
+          <li><b>Encoder en URL</b> (le texte combiné).</li>
+          <li><b>Ouvrir les URL</b> : <code style="word-break:break-all">${esc(location.href.split("#")[0])}#/sync?w=</code> suivi de la variable <i>Texte encodé</i>.</li>
+        </ol>
+        <div class="small muted">Lance-le une fois à la main : iOS te demande l'accès à Santé (autorise tout), puis iBiFit s'ouvre et affiche les séances.</div>
+      </details>
+      <details class="mini"><summary><b>2. L'automatiser à 8 h</b></summary>
+        <ol class="steps">
+          <li>Raccourcis → onglet <b>Automatisation</b> → <b>+</b> → <b>Heure de la journée</b>.</li>
+          <li><b>8:00</b>, <b>Quotidiennement</b>, coche <b>Exécuter immédiatement</b>.</li>
+          <li>Choisis le raccourci <b>iBiFit Sync</b>.</li>
+        </ol>
+      </details>
+      <button class="btn block" id="syncNow" style="margin-top:10px">🔄 Synchroniser maintenant</button>
+      <div class="small muted" style="margin-top:8px">${settings.lastSync ? `Dernière synchro : ${new Date(settings.lastSync).toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}.` : "Pas encore de synchro."} Les séances déjà présentes ne sont jamais dupliquées.</div>
+    </div>
+    <div class="card health-card">
       <h2>❤️ Récupérer mes séances de l'app Santé</h2>
       <div class="small muted" style="margin-bottom:10px">Toutes tes séances Apple Watch d'un coup : heure de début et de fin, durée, distance, kcal, fréquence cardiaque, tapis ou extérieur. Ta correction de distance s'applique automatiquement, et tes ajouts (distance réelle, paliers) sont conservés.</div>
       <ol class="steps">
@@ -614,6 +650,7 @@ function viewSettings() {
     toast(`Correction enregistrée : ×${(r / w).toFixed(2).replace(".", ",")}`);
     viewSettings();
   }));
+  document.getElementById("syncNow").addEventListener("click", () => { location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent("iBiFit Sync"); });
   document.getElementById("healthFile").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;

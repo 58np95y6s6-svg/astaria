@@ -246,3 +246,40 @@ export function parseHealthWorkout(block) {
     hrAvg: hr?.average != null ? r(+hr.average, 0) : null,
   };
 }
+
+// ---------- Synchro par Raccourci : #/sync?w=début~fin~type~distance~kcal;… ----------
+const frNum = (s) => { const m = /(-?\d+(?:[.,]\d+)?)/.exec(String(s || "").replace(/\s/g, "")); return m ? parseFloat(m[1].replace(",", ".")) : null; };
+function looseDate(s) {
+  s = String(s || "").trim();
+  if (!s) return null;
+  const h = healthDate(s);
+  if (h) return h;
+  let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})[ ,à]*(\d{1,2})[:h](\d{2})(?::(\d{2}))?/.exec(s); // 13/11/2026 06:42
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)).toISOString();
+  const d = new Date(s);
+  return isNaN(d) ? null : d.toISOString();
+}
+export function syncType(s) {
+  const t = norm(s || "");
+  const indoor = /interieur|indoor|tapis|treadmill/.test(t), outdoor = /exterieur|outdoor/.test(t);
+  if (/marche|walk/.test(t)) return outdoor ? "walk_out" : "walk_treadmill"; // « Marche » seul = tapis (comme pour les captures)
+  if (/course|run/.test(t)) return indoor ? "run_treadmill" : "run_out";
+  if (/velo|cycl|bike/.test(t)) return "bike";
+  return "other";
+}
+export function parseSyncParam(w) {
+  return String(w || "").split(/[;\n]+/).map((row) => {
+    const [a, b, type, dist, kcal] = row.split("~");
+    const start = looseDate(a), end = looseDate(b);
+    if (!start) return null;
+    let km = frNum(dist);
+    if (km != null) { const u = norm(dist); km = /\bmi\b|mile/.test(u) ? km * 1.609344 : /\bm\b/.test(u) && !/km/.test(u) ? km / 1000 : km; km = Math.round(km * 100) / 100; }
+    let k = frNum(kcal);
+    if (k != null && /kj/.test(norm(kcal))) k = k / 4.184;
+    return {
+      id: "h" + new Date(start).getTime().toString(36), source: "sante", type: syncType(type), date: start,
+      durationSec: end ? Math.max(0, Math.round((new Date(end) - new Date(start)) / 1000)) : 0,
+      watchKm: km, kcalActive: k != null ? Math.round(k) : null, kcalTotal: null, hrAvg: null,
+    };
+  }).filter((x) => x && x.durationSec > 0);
+}

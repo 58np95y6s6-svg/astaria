@@ -166,3 +166,12 @@ test("export Santé : séance de marche sur tapis", () => {
   const old = parseHealthWorkout(`<Workout workoutActivityType="HKWorkoutActivityTypeRunning" duration="30" durationUnit="min" totalDistance="3.1" totalDistanceUnit="mi" totalEnergyBurned="300" totalEnergyBurnedUnit="kcal" startDate="2020-05-01 18:00:00 +0200" endDate="2020-05-01 18:30:00 +0200"/>`);
   assert.deepEqual([old.type, old.watchKm, old.kcalActive], ["run_out", 4.99, 300]);
 });
+
+import { parseSyncParam } from "../js/core.js";
+test("synchro Raccourci : plusieurs séances dans un lien", () => {
+  const r = parseSyncParam("2026-11-13T06:42:00+01:00~2026-11-13T07:30:00+01:00~Marche~2,9 km~255 kcal;13/11/2026 18:00~13/11/2026 18:30~Course en extérieur~3,1 mi~300 kcal;bad");
+  assert.equal(r.length, 2);
+  assert.deepEqual([r[0].type, r[0].durationSec, r[0].watchKm, r[0].kcalActive], ["walk_treadmill", 2880, 2.9, 255]);
+  assert.equal(r[0].id, "h" + new Date("2026-11-13T05:42:00Z").getTime().toString(36));
+  assert.deepEqual([r[1].type, r[1].watchKm, r[1].durationSec], ["run_out", 4.99, 1800]);
+});

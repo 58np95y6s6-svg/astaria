@@ -54,6 +54,7 @@ export function mergeHealth(items, { since = null } = {}) {
     if (since && h.date < since) { skipped++; continue; }
     const t = new Date(h.date).getTime();
     let i = list.findIndex((x) => x.id === h.id || x.healthId === h.id);
+    if (i < 0) i = list.findIndex((x) => (x.source === "sante" || x.healthId) && Math.abs(new Date(x.date).getTime() - t) <= 2 * 60e3);
     if (i < 0) i = list.findIndex((x) => !x.healthId && x.source !== "sante" && Math.abs(new Date(x.date).getTime() - t) <= 10 * 60e3);
     if (i >= 0) {
       const cur = list[i];

@@ -3,7 +3,7 @@
 
 // Tracés réels [lat, lon], dans le sens de la marche.
 export const SAT = {
-  normandie: { path: [[49.4446, 0.2706], [49.4251, 0.2779]] },
+  normandie: { path: [[49.44737, 0.27165], [49.42839, 0.27431]] },
 };
 
 const TILE = (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;

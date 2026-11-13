@@ -1,6 +1,7 @@
 import { spanSec, ACTIVITIES, corrected, factorFor, parseDuration, fmtDuration, fmtPace, parseWorkoutText, parseImportParams, weekKey, parseSegments, segmentsKm, segmentsMin, segmentsText } from "./core.js";
 import { PLACES, placesFor, pickFor, placeSVG, ratioText, nextChallenge, challengePlaces } from "./places.js";
 import { renderStory, shareBlob } from "./story.js";
+import { foodFor, foodText, periodRange, periodLabel, summarize, streaks, motivation } from "./recap.js";
 import { loadWorkouts, loadSettings, saveSettings, upsertWorkout, deleteWorkout, exportAll, importAll } from "./store.js";
 import { ocrImage } from "./ocr.js";
 
@@ -32,11 +33,12 @@ const routes = [
   [/^#?\/?$/, viewHome],
   [/^#\/import\?(.*)$/, (q) => { draft = { ...emptyDraft(), ...fromParsed(parseImportParams(q)) }; draft.end = endOf(draft.date, (numIn(draft.min) || 0) * 60 + (numIn(draft.sec) || 0)); addOpen = true; history.replaceState(null, "", "#/"); viewHome(); toast("Séance reçue : vérifie puis enregistre"); }],
   [/^#\/stats$/, viewStats],
+  [/^#\/resume$/, viewRecap],
   [/^#\/reglages$/, viewSettings],
 ];
 function router() {
   const h = location.hash || "#/";
-  const nav = h.startsWith("#/stats") ? "stats" : h.startsWith("#/reglages") ? "reglages" : "home";
+  const nav = h.startsWith("#/stats") ? "stats" : h.startsWith("#/resume") ? "resume" : h.startsWith("#/reglages") ? "reglages" : "home";
   document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === nav));
   for (const [re, fn] of routes) {
     const m = h.match(re);
@@ -143,6 +145,7 @@ function workoutCard(w) {
       <div><b class="num">${int(w.kcalActive)}</b><span>kcal</span></div>
     </div>
     ${compareStrip(w, c)}
+    ${w.kcalActive > 0 ? `<div class="food-line">🔥 ${int(w.kcalActive)} kcal = ${foodFor(w.kcalActive, w.id, 2).map((x) => `${x.f.e} ${esc(foodText(x.f, x.n))}`).join(" · ")}</div>` : ""}
     ${open ? `<div class="wk-body" data-stop>
       ${w.segments?.length ? `<div class="seg-prev" style="margin-top:0">${segProfile(w.segments)}<div class="small muted">${esc(segmentsText(w.segments))} km/h</div></div>` : ""}
       <div class="small muted">${c.speed != null ? c.speed.toLocaleString("fr-FR") : "–"} km/h${w.kcalTotal ? ` · ${int(w.kcalTotal)} kcal totales` : ""}${w.hrAvg ? ` · FC moy. ${int(w.hrAvg)} bpm` : ""}</div>
@@ -435,6 +438,111 @@ function paceChart(keys, vals) {
     <text x="${L}" y="${H - 4}">${wkShort(keys[pts[0][0]])}</text><text x="${W - R}" y="${H - 4}" text-anchor="end">${wkShort(keys[pts[pts.length - 1][0]])}</text>
   </svg>`;
 }
+
+// ---------- Résumés ----------
+let recapKind = "week", recapOffset = 0;
+const goalKm = (kind) => {
+  const g = settings.goalWeekKm > 0 ? settings.goalWeekKm : 12;
+  return kind === "week" ? g : kind === "month" ? Math.round(g * 4.35) : kind === "year" ? Math.round(g * 52) : null;
+};
+function ring(pct) {
+  const r = 52, C = 2 * Math.PI * r, v = Math.max(0, Math.min(1, pct));
+  return `<svg viewBox="0 0 128 128" class="ring"><circle cx="64" cy="64" r="${r}" stroke="rgba(255,255,255,.14)" stroke-width="14" fill="none"/>
+    <circle cx="64" cy="64" r="${r}" stroke="url(#rg)" stroke-width="14" fill="none" stroke-linecap="round" stroke-dasharray="${(v * C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 64 64)"/>
+    <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a7a"/><stop offset="1" stop-color="#f4555a"/></linearGradient></defs>
+    <text x="64" y="70" text-anchor="middle" font-size="24" font-weight="800" fill="#fff">${Math.round(pct * 100)}%</text></svg>`;
+}
+function recapBars(kind, r, ws) {
+  let keys = [], lab = [], val = [];
+  const corrKm = (w) => corrected(w, settings).km;
+  if (kind === "week" || kind === "month") {
+    for (let i = 0; i < r.days; i++) { const d = new Date(r.start); d.setDate(d.getDate() + i); keys.push(d.toDateString()); lab.push(kind === "week" ? "LMMJVSD"[i] : (i % 5 === 0 ? String(i + 1) : "")); }
+    val = keys.map((k) => ws.filter((w) => new Date(w.date).toDateString() === k).reduce((t, w) => t + corrKm(w), 0));
+  } else {
+    const months = kind === "year" ? [...Array(12)].map((_, i) => [r.start.getFullYear(), i]) : [...new Set(ws.map((w) => { const d = new Date(w.date); return `${d.getFullYear()}-${d.getMonth()}`; }))].sort().map((x) => x.split("-").map(Number)).slice(-12);
+    lab = months.map(([, m]) => "JFMAMJJASOND"[m]);
+    val = months.map(([y, m]) => ws.filter((w) => { const d = new Date(w.date); return d.getFullYear() === y && d.getMonth() === m; }).reduce((t, w) => t + corrKm(w), 0));
+  }
+  if (!val.some((v) => v > 0)) return "";
+  const W = 320, H = 110, n = val.length, bw = W / n, max = Math.max(...val);
+  const today = new Date().toDateString();
+  return `<svg class="chart" style="height:120px" viewBox="0 0 ${W} ${H}">${val.map((v, i) => {
+    const h = v > 0 ? Math.max(4, (v / max) * (H - 26)) : 3;
+    const on = keys[i] === today;
+    return `<rect x="${(i * bw + bw * 0.18).toFixed(1)}" y="${(H - 14 - h).toFixed(1)}" width="${(bw * 0.64).toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(6, bw * 0.3).toFixed(1)}" fill="${v > 0 ? (on ? "#f4555a" : "#1e2342") : "#e6e8f2"}"/>`
+      + (lab[i] ? `<text x="${(i * bw + bw / 2).toFixed(1)}" y="${H - 2}" text-anchor="middle">${lab[i]}</text>` : "");
+  }).join("")}</svg>`;
+}
+
+function viewRecap() {
+  const all = loadWorkouts();
+  const corr = (w) => corrected(w, settings);
+  const r = periodRange(recapKind, recapOffset);
+  const cur = summarize(all, r, corr);
+  const prev = recapKind === "all" ? null : summarize(all, periodRange(recapKind, recapOffset - 1), corr);
+  const goal = goalKm(recapKind);
+  const isCurrent = recapOffset === 0;
+  const st = streaks(all);
+  const word = { week: "semaine", month: "mois", year: "année", all: "" }[recapKind];
+  const delta = prev && prev.km > 0 ? Math.round(((cur.km - prev.km) / prev.km) * 100) : null;
+  const foods = foodFor(cur.kcal, `${recapKind}${r.start.getTime()}`, 4);
+  const cmp = cur.km > 0 ? pickFor(cur.km, `${recapKind}${r.start.getTime()}`) : null;
+  const cmpRt = cmp && ratioText(cmp.ratio, cmp.place);
+  $app.innerHTML = `
+    <div class="tabs">${[["week", "Semaine"], ["month", "Mois"], ["year", "Année"], ["all", "Tout"]].map(([k, l]) => `<button data-kind="${k}" class="${recapKind === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    ${recapKind !== "all" ? `<div class="period-nav"><button data-off="-1" aria-label="Précédent">‹</button><b>${esc(periodLabel(recapKind, r))}</b><button data-off="1" aria-label="Suivant"${isCurrent ? " disabled" : ""}>›</button></div>` : ""}
+    <div class="recap-hero">
+      <div class="grow">
+        <div class="small" style="opacity:.7">${recapKind === "all" ? "Depuis le début" : isCurrent ? { week: "Cette semaine", month: "Ce mois-ci", year: "Cette année" }[recapKind] : esc(periodLabel(recapKind, r))}</div>
+        <div class="rh-big num">${km(cur.km, 1)}</div>
+        ${delta != null ? `<span class="rh-chip ${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)} % vs ${recapKind === "week" ? "sem. passée" : recapKind === "month" ? "mois dernier" : "an dernier"}</span>` : ""}
+        <div class="rh-msg">${esc(motivation({ kind: recapKind, cur, prev, goalKm: goal, isCurrent }))}</div>
+      </div>
+      ${goal ? `<div class="rh-goal">${ring(cur.km / goal)}<div class="small" style="opacity:.75">${km(cur.km, 1).replace(" km", "")} / ${goal} km</div></div>` : ""}
+    </div>
+    <div class="kpis">
+      <div class="kpi"><b class="num">${cur.n}</b><span>séance${cur.n > 1 ? "s" : ""} · ${cur.days.size} jour${cur.days.size > 1 ? "s" : ""}</span></div>
+      <div class="kpi"><b class="num">${fmtDuration(cur.sec)}</b><span>temps total</span></div>
+      <div class="kpi"><b class="num">${int(cur.kcal)}</b><span>kcal brûlées</span></div>
+      <div class="kpi"><b class="num">${fmtPace(cur.paceSec).replace(" /km", "")}</b><span>allure moy. /km</span></div>
+    </div>
+    ${recapBars(recapKind, r, cur.ws) ? `<div class="card"><h2>Kilomètres ${recapKind === "week" ? "par jour" : recapKind === "month" ? "par jour" : "par mois"}</h2>${recapBars(recapKind, r, cur.ws)}</div>` : ""}
+    ${foods.length ? `<div class="card food-card"><h2>🔥 ${int(cur.kcal)} kcal brûlées, c'est l'équivalent de</h2>
+      <div class="foods">${foods.map((x) => `<div class="food"><span class="fe">${x.f.e}</span><b class="num">${qtyHTML(x.n)}</b><span>${esc(x.n >= 1.75 ? x.f.many : x.f.one)}</span></div>`).join("")}</div>
+      <div class="small muted" style="margin-top:8px">Valeurs moyennes, pour le fun. Ça ne veut pas dire qu'il faut les manger 😇</div></div>` : ""}
+    ${cmp ? `<div class="cmp" style="margin:12px 0"><div class="cmp-img">${placeSVG(cmp.place, cmp.ratio, { id: "rc" })}</div>
+      <div class="grow"><div class="small muted">Distance en vrai</div><b class="cmp-big">${esc(cmpRt.big)}</b> <span class="cmp-line">${esc(cmpRt.line)}</span></div>
+      <button class="story-btn" id="recapStory" aria-label="Partager en story">${IG}</button></div>` : ""}
+    <div class="card"><h2>Séries</h2>
+      <div class="streaks"><div><b class="num">🔥 ${st.dayStreak}</b><span>jour${st.dayStreak > 1 ? "s" : ""} d'affilée</span></div><div><b class="num">📅 ${st.weekStreak}</b><span>semaine${st.weekStreak > 1 ? "s" : ""} d'affilée</span></div></div>
+      <div class="small muted" style="margin-top:8px">${st.dayStreak ? "Ne casse pas la série demain 😉" : "Une séance aujourd'hui pour lancer une série ?"}</div></div>
+    ${cur.n ? `<div class="card"><h2>Records de la période</h2>
+      <div class="rec"><span>🏅 Plus longue séance</span><b>${km(cur.longest.km)} · ${new Date(cur.longest.w.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</b></div>
+      ${cur.bestPace ? `<div class="rec"><span>⚡ Meilleure allure</span><b>${fmtPace(cur.bestPace.pace)}</b></div>` : ""}
+      ${cur.bestDay ? `<div class="rec"><span>📆 Plus grosse journée</span><b>${km(cur.bestDay.km)} · ${new Date(cur.bestDay.date).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })}</b></div>` : ""}
+    </div>` : ""}
+    <div class="card"><div class="row between"><div><h2 style="margin:0">Objectif hebdo</h2><div class="small muted">${goalKm("month")} km / mois · ${goalKm("year")} km / an</div></div>
+      <div class="row" style="gap:6px"><input type="text" inputmode="decimal" id="goal" value="${String(goalKm("week")).replace(".", ",")}" style="width:70px;text-align:center"><span class="muted">km</span><button class="btn sm" id="goalOk">OK</button></div></div></div>`;
+  $app.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => { recapKind = b.dataset.kind; recapOffset = 0; viewRecap(); }));
+  $app.querySelectorAll("[data-off]").forEach((b) => b.addEventListener("click", () => { recapOffset = Math.min(0, recapOffset + +b.dataset.off); viewRecap(); }));
+  document.getElementById("goalOk").addEventListener("click", () => {
+    const g = numIn(document.getElementById("goal").value);
+    if (!(g > 0)) { toast("Objectif invalide"); return; }
+    settings.goalWeekKm = g; saveSettings(settings); toast(`Objectif : ${g.toLocaleString("fr-FR")} km / semaine 🎯`); viewRecap();
+  });
+  document.getElementById("recapStory")?.addEventListener("click", () => {
+    const cands = [cmp, ...placesFor(cur.km).filter((x) => x.place.id !== cmp.place.id)];
+    const f = foods[0];
+    const per = recapKind === "week" ? "Cette semaine" : recapKind === "month" ? "Ce mois-ci" : recapKind === "year" ? "Cette année" : "Depuis le début";
+    openStory(cands, (cand) => ({
+      place: cand.place, ratio: cand.ratio, date: recapKind === "all" ? dateStory(Date.now()) : periodLabel(recapKind, r),
+      kicker: `${isCurrent || recapKind === "all" ? per : recapKind === "week" ? `Du ${periodLabel(recapKind, r).replace(" – ", " au ")}` : `En ${periodLabel(recapKind, r).toLowerCase()}`}, j'ai parcouru l'équivalent de`,
+      subtitle: `${km(cur.km, 1)}${f ? ` · 🔥 ${int(cur.kcal)} kcal = ${f.f.e} ${foodText(f.f, f.n)}` : ""}`,
+      stats: [[km(cur.km, 1).replace(" km", ""), "km"], [String(cur.n), `séance${cur.n > 1 ? "s" : ""}`], [cur.sec >= 36000 ? `${Math.floor(cur.sec / 3600)} h ${pad(Math.floor((cur.sec % 3600) / 60))}` : fmtDuration(cur.sec), "durée"], [int(cur.kcal), "kcal"]],
+    }));
+  });
+}
+const qtyHTML = (n) => { const r = Math.round(n * 2) / 2; return n >= 10 ? Math.round(n).toLocaleString("fr-FR") : r === 0.5 ? "½" : r.toLocaleString("fr-FR"); };
 
 // ---------- Réglages ----------
 function viewSettings() {

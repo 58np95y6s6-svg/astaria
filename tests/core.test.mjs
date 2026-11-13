@@ -107,3 +107,35 @@ test("plage horaire « 17:02-17:28 » → début, fin, durée", () => {
   assert.equal(r2.durationSec, 1512); // la durée affichée prime
   assert.equal(spanSec("23:40", "00:10"), 1800);
 });
+
+import { foodFor, foodText, qty, periodRange, summarize, streaks, motivation, FOODS } from "../js/recap.js";
+test("calories → nourriture", () => {
+  const f = foodFor(255, "x", 3);
+  assert.equal(f.length, 3);
+  assert.equal(new Set(f.map((x) => x.f.e)).size, 3);
+  const bm = FOODS.find((x) => x.id === "bigmac");
+  assert.equal(foodText(bm, 255 / 503), "½ Big Mac");
+  assert.equal(foodText(FOODS.find((x) => x.id === "croissant"), 2.2), "2 croissants");
+  assert.equal(qty(1.3), "1,5");
+  assert.ok(FOODS.length >= 25);
+});
+test("périodes, totaux, séries, motivation", () => {
+  const now = new Date("2026-11-13T10:00:00"); // vendredi
+  const w = periodRange("week", 0, now);
+  assert.equal(w.start.getDay(), 1);
+  assert.equal(w.start.getDate(), 9);
+  assert.equal(periodRange("month", -1, now).start.getMonth(), 9);
+  const d = (s) => new Date(s).toISOString();
+  const list = [
+    { id: 1, date: d("2026-11-13T07:00:00"), durationSec: 2700, kcalActive: 255 },
+    { id: 2, date: d("2026-11-12T07:00:00"), durationSec: 2700, kcalActive: 250 },
+    { id: 3, date: d("2026-11-11T07:00:00"), durationSec: 1800, kcalActive: 150 },
+    { id: 4, date: d("2026-11-03T07:00:00"), durationSec: 1800, kcalActive: 150 },
+  ];
+  const corr = (x) => ({ km: x.durationSec / 600, paceSec: 600 });
+  const s = summarize(list, w, corr);
+  assert.deepEqual([s.n, s.km, s.kcal, s.days.size], [3, 12, 655, 3]);
+  assert.deepEqual(streaks(list, now), { dayStreak: 3, weekStreak: 2 });
+  assert.match(motivation({ kind: "week", cur: s, prev: { km: 6, n: 1 }, goalKm: 12, isCurrent: true }), /Objectif atteint/);
+  assert.match(motivation({ kind: "week", cur: s, prev: { km: 6, n: 1 }, goalKm: 30, isCurrent: true }), /\+100 %/);
+});
